@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Falcon — Agencia de Automatización con IA</title>
+<meta name="description" content="Falcon automatiza tu negocio con agentes de Inteligencia Artificial: WhatsApp, Instagram, CRM y contenido, trabajando 24/7.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233d6bff'/%3E%3Cstop offset='1' stop-color='%23b45bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='30' fill='%230a0a0f'/%3E%3Ccircle cx='32' cy='32' r='30' fill='none' stroke='url(%23g)' stroke-width='3'/%3E%3Cpath d='M20 40 L32 18 L44 40 L32 33 Z' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+<header class="site-header" id="header">
+  <div class="container header-inner">
+    <a href="#inicio" class="logo" aria-label="Falcon, inicio">
+      <svg class="logo-mark" width="30" height="30" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <circle cx="32" cy="32" r="30" fill="none" stroke="url(#logoGrad)" stroke-width="3"/>
+        <path d="M20 40 L32 18 L44 40 L32 33 Z" fill="url(#logoGrad)"/>
+        <defs>
+          <linearGradient id="logoGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#3d6bff"/>
+            <stop offset="1" stop-color="#b45bfa"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span class="logo-word">Falcon</span>
+    </a>
+
+    <nav class="main-nav" id="main-nav" aria-label="Navegación principal">
+      <a href="#servicios">Servicios</a>
+      <a href="#beneficios">Beneficios</a>
+      <a href="#contacto">Contacto</a>
+    </nav>
+
+    <div class="header-actions">
+      <a href="#contacto" class="btn btn-primary btn-small">Agendar llamada</a>
+      <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="mobile-menu" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="#servicios">Servicios</a>
+    <a href="#beneficios">Beneficios</a>
+    <a href="#contacto">Contacto</a>
+    <a href="#contacto" class="btn btn-primary">Agendar llamada</a>
+  </div>
+</header>
+
+<main id="contenido">
+
+  <!-- HERO -->
+  <section class="hero" id="inicio">
+    <div class="hero-glow hero-glow-blue" aria-hidden="true"></div>
+    <div class="hero-glow hero-glow-violet" aria-hidden="true"></div>
+
+    <div class="container hero-grid">
+      <div class="hero-copy reveal">
+        <p class="eyebrow">// Agencia de Automatización con IA</p>
+        <h1 class="hero-title">Escala tu negocio con Agentes de Inteligencia Artificial</h1>
+        <p class="hero-subtitle">Conectamos WhatsApp, Instagram, tu CRM y tus datos en un solo sistema que responde, vende y hace seguimiento por vos, las 24 horas del día.</p>
+        <div class="hero-actions">
+          <a href="#contacto" class="btn btn-primary btn-large">
+            Agendar llamada
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="#servicios" class="btn btn-ghost btn-large">Ver servicios</a>
+        </div>
+        <dl class="hero-stats">
+          <div>
+            <dt>24/7</dt>
+            <dd>Atención sin pausas</dd>
+          </div>
+          <div>
+            <dt>+1</dt>
+            <dd>Sistema, todos tus canales</dd>
+          </div>
+          <div>
+            <dt>0</dt>
+            <dd>Tareas manuales repetidas</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="hero-visual" aria-hidden="true">
+        <svg class="network" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#3d6bff"/>
+              <stop offset="1" stop-color="#b45bfa"/>
+            </linearGradient>
+            <radialGradient id="hubGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0" stop-color="#7d8fff"/>
+              <stop offset="55%" stop-color="#5a5bd8"/>
+              <stop offset="100%" stop-color="#5a5bd8" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <path id="pathWA" class="network-line" d="M320,320 L140,160" />
+          <path id="pathIG" class="network-line" d="M320,320 L500,150" />
+          <path id="pathDB" class="network-line" d="M320,320 L130,500" />
+          <path id="pathCT" class="network-line" d="M320,320 L500,510" />
+
+          <circle class="packet" r="4" fill="#eaf0ff"><animateMotion dur="3.2s" repeatCount="indefinite" rotate="auto"><mpath href="#pathWA"/></animateMotion></circle>
+          <circle class="packet" r="4" fill="#eaf0ff"><animateMotion dur="3.8s" begin="0.4s" repeatCount="indefinite" rotate="auto"><mpath href="#pathIG"/></animateMotion></circle>
+          <circle class="packet" r="4" fill="#eaf0ff"><animateMotion dur="3.5s" begin="0.8s" repeatCount="indefinite" rotate="auto"><mpath href="#pathDB"/></animateMotion></circle>
+          <circle class="packet" r="4" fill="#eaf0ff"><animateMotion dur="4.1s" begin="1.2s" repeatCount="indefinite" rotate="auto"><mpath href="#pathCT"/></animateMotion></circle>
+
+          <g class="node" transform="translate(140,160)">
+            <circle class="node-ring" r="34"/>
+            <circle r="34" fill="#12121c" stroke="url(#lineGrad)" stroke-width="1.5"/>
+            <path d="M-11,-9 a11,11 0 1 1 -3,14 l-8,3 3,-7 a11,11 0 0 1 8,-10z" transform="translate(0,0) scale(0.8)" fill="none" stroke="#dfe4ff" stroke-width="1.6" stroke-linejoin="round"/>
+            <text x="0" y="52" text-anchor="middle" class="node-label">WhatsApp</text>
+          </g>
+
+          <g class="node" transform="translate(500,150)">
+            <circle class="node-ring" r="34"/>
+            <circle r="34" fill="#12121c" stroke="url(#lineGrad)" stroke-width="1.5"/>
+            <rect x="-12" y="-12" width="24" height="24" rx="7" fill="none" stroke="#dfe4ff" stroke-width="1.6"/>
+            <circle r="6" fill="none" stroke="#dfe4ff" stroke-width="1.6"/>
+            <circle cx="7" cy="-7" r="1.4" fill="#dfe4ff"/>
+            <text x="0" y="52" text-anchor="middle" class="node-label">Instagram</text>
+          </g>
+
+          <g class="node" transform="translate(130,500)">
+            <circle class="node-ring" r="34"/>
+            <circle r="34" fill="#12121c" stroke="url(#lineGrad)" stroke-width="1.5"/>
+            <rect x="-12" y="-11" width="24" height="22" rx="2" fill="none" stroke="#dfe4ff" stroke-width="1.6"/>
+            <path d="M-12,-3 h24 M-12,5 h24 M-4,-11 v22" stroke="#dfe4ff" stroke-width="1.2"/>
+            <text x="0" y="52" text-anchor="middle" class="node-label">CRM / Datos</text>
+          </g>
+
+          <g class="node" transform="translate(500,510)">
+            <circle class="node-ring" r="34"/>
+            <circle r="34" fill="#12121c" stroke="url(#lineGrad)" stroke-width="1.5"/>
+            <rect x="-13" y="-10" width="26" height="20" rx="3" fill="none" stroke="#dfe4ff" stroke-width="1.6"/>
+            <path d="M-3,-4 l8,4 -8,4z" fill="#dfe4ff"/>
+            <text x="0" y="52" text-anchor="middle" class="node-label">Contenido</text>
+          </g>
+
+          <g class="hub">
+            <circle r="70" fill="url(#hubGlow)" opacity="0.35"/>
+            <circle class="hub-ring" r="54"/>
+            <circle r="54" fill="#14141f" stroke="url(#lineGrad)" stroke-width="2" transform="translate(320,320)" />
+          </g>
+          <g transform="translate(320,320)">
+            <path d="M0,-16 L5,-4 L18,0 L5,4 L0,16 L-5,4 L-18,0 L-5,-4 Z" fill="url(#lineGrad)"/>
+            <text x="0" y="42" text-anchor="middle" class="node-label node-label-hub">Agente IA</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVICIOS -->
+  <section class="section" id="servicios">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">// Qué automatizamos</p>
+        <h2>Un sistema de agentes para cada parte de tu operación</h2>
+        <p class="section-lead">Cada agente cubre una función específica de tu negocio y se conecta con el resto, para que la información fluya sola.</p>
+      </div>
+
+      <div class="card-grid reveal">
+        <article class="service-card">
+          <div class="service-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3z" stroke="currentColor" stroke-width="1.5"/><path d="M8.5 9.5c0 3.5 2.5 6 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <p class="service-tag">// Canal WhatsApp + Instagram</p>
+          <h3>Chatbots para WhatsApp e Instagram</h3>
+          <p>Atención y ventas 24/7. Tus clientes reciben respuesta al instante, sin importar la hora, mientras vos te enfocás en operar.</p>
+        </article>
+
+        <article class="service-card">
+          <div class="service-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 9.5h17M9 9.5V20" stroke="currentColor" stroke-width="1.5"/></svg>
+          </div>
+          <p class="service-tag">// Datos y sistemas</p>
+          <h3>Integración de Excel, CRM y ERP</h3>
+          <p>Sincronizamos tus datos automáticamente entre plataformas, sin cargas manuales ni planillas desactualizadas.</p>
+        </article>
+
+        <article class="service-card">
+          <div class="service-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 7.5v5l3.2 1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <p class="service-tag">// Retención</p>
+          <h3>Agentes de Seguimiento</h3>
+          <p>Retienen y re-contactan prospectos automáticamente, para que ninguna oportunidad se enfríe ni se pierda.</p>
+        </article>
+
+        <article class="service-card">
+          <div class="service-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 9.5l5 2.5-5 2.5z" fill="currentColor"/></svg>
+          </div>
+          <p class="service-tag">// Producción de contenido</p>
+          <h3>Automatización de Contenido</h3>
+          <p>Investigación, guiones con IA y creación de videos, listos para publicar sin depender de un equipo grande.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- BENEFICIOS -->
+  <section class="section section-alt" id="beneficios">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">// Por qué elegirnos</p>
+        <h2>Resultados que se notan en la operación diaria</h2>
+      </div>
+
+      <div class="benefit-grid reveal">
+        <article class="benefit-card">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="url(#bGrad1)" stroke-width="1.6"/><path d="M12 7.5v5l3.2 1.8" stroke="url(#bGrad1)" stroke-width="1.6" stroke-linecap="round"/><defs><linearGradient id="bGrad1" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#3d6bff"/><stop offset="1" stop-color="#b45bfa"/></linearGradient></defs></svg>
+          <h3>Ahorro de tiempo</h3>
+          <p>Tu equipo deja de perder horas en tareas repetitivas. Los agentes trabajan mientras vos dormís.</p>
+        </article>
+
+        <article class="benefit-card">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9" stroke="url(#bGrad2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h5v5" stroke="url(#bGrad2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="bGrad2" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#3d6bff"/><stop offset="1" stop-color="#b45bfa"/></linearGradient></defs></svg>
+          <h3>Aumento de conversiones</h3>
+          <p>Respuestas instantáneas y seguimiento constante convierten más prospectos en clientes.</p>
+        </article>
+
+        <article class="benefit-card">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 12a3 3 0 1 1 6 0 3 3 0 1 0 6 0 3 3 0 1 0-6 0 3 3 0 1 1-6 0z" stroke="url(#bGrad3)" stroke-width="1.6"/><defs><linearGradient id="bGrad3" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#3d6bff"/><stop offset="1" stop-color="#b45bfa"/></linearGradient></defs></svg>
+          <h3>Procesos 100% autónomos</h3>
+          <p>Configurás el sistema una vez y opera solo, sin supervisión constante de tu parte.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACTO -->
+  <section class="section" id="contacto">
+    <div class="container contact-grid">
+      <div class="contact-copy reveal">
+        <p class="eyebrow">// Empecemos</p>
+        <h2>Hablemos de cómo automatizar tu negocio</h2>
+        <p class="section-lead">Contanos en qué estás trabajando y te mostramos cómo un sistema de agentes de IA puede hacerlo por vos.</p>
+        <ul class="contact-points">
+          <li>Respuesta en menos de 24 horas</li>
+          <li>Diagnóstico inicial sin costo</li>
+          <li>Propuesta a medida de tu negocio</li>
+        </ul>
+      </div>
+
+      <form class="contact-form reveal" id="contact-form" novalidate>
+        <div class="form-row">
+          <label for="nombre">Nombre</label>
+          <input type="text" id="nombre" name="nombre" autocomplete="name" required placeholder="Tu nombre completo">
+        </div>
+        <div class="form-row">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="email" required placeholder="tu@empresa.com">
+        </div>
+        <div class="form-row">
+          <label for="empresa">Nombre de su empresa o negocio</label>
+          <input type="text" id="empresa" name="empresa" autocomplete="organization" required placeholder="Nombre de tu empresa">
+        </div>
+        <div class="form-row">
+          <label for="consulta">Consulta</label>
+          <textarea id="consulta" name="consulta" rows="4" required placeholder="Contanos qué te gustaría automatizar"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-large form-submit">Comencemos</button>
+        <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <a href="#inicio" class="logo" aria-label="Falcon, inicio">
+        <svg class="logo-mark" width="26" height="26" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <circle cx="32" cy="32" r="30" fill="none" stroke="url(#logoGradFooter)" stroke-width="3"/>
+          <path d="M20 40 L32 18 L44 40 L32 33 Z" fill="url(#logoGradFooter)"/>
+          <defs>
+            <linearGradient id="logoGradFooter" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#3d6bff"/>
+              <stop offset="1" stop-color="#b45bfa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="logo-word">Falcon</span>
+      </a>
+      <p>Agencia de Automatización con IA.</p>
+    </div>
+
+    <nav class="footer-nav" aria-label="Navegación de pie de página">
+      <a href="#servicios">Servicios</a>
+      <a href="#beneficios">Beneficios</a>
+      <a href="#contacto">Contacto</a>
+    </nav>
+
+    <div class="footer-social">
+      <a href="#" aria-label="Falcon en Instagram">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/><circle cx="17" cy="7" r="1" fill="currentColor"/></svg>
+      </a>
+      <a href="#" aria-label="Falcon en WhatsApp">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3z" stroke="currentColor" stroke-width="1.5"/></svg>
+      </a>
+      <a href="#" aria-label="Falcon en LinkedIn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 10.5v6M8 8v.01M12 16.5v-4a2 2 0 0 1 4 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </a>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <p>© <span id="year">2026</span> Falcon. Todos los derechos reservados.</p>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
