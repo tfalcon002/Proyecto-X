@@ -61,7 +61,7 @@ form.addEventListener('submit', (event) => {
   event.preventDefault();
 
   if (!form.checkValidity()) {
-    status.textContent = 'Revisá los campos: falta completar información obligatoria.';
+    status.textContent = 'Revisa los campos: falta completar información obligatoria.';
     form.reportValidity();
     return;
   }
