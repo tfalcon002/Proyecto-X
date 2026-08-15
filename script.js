@@ -53,11 +53,12 @@ if (networkSvg && prefersReducedMotion.matches && typeof networkSvg.pauseAnimati
   networkSvg.pauseAnimations();
 }
 
-// Formulario de contacto (sin backend conectado todavía)
+// Formulario de contacto: envío por AJAX a Formspree, sin salir de la página
 const form = document.getElementById('contact-form');
 const status = document.getElementById('form-status');
+const submitButton = form.querySelector('.form-submit');
 
-form.addEventListener('submit', (event) => {
+form.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   if (!form.checkValidity()) {
@@ -67,8 +68,27 @@ form.addEventListener('submit', (event) => {
   }
 
   const nombre = document.getElementById('nombre').value.trim();
-  status.textContent = `Gracias, ${nombre}. Recibimos tu consulta y te vamos a contactar en menos de 24 horas.`;
-  form.reset();
+  submitButton.disabled = true;
+  status.textContent = 'Enviando...';
+
+  try {
+    const response = await fetch(form.action, {
+      method: form.method,
+      body: new FormData(form),
+      headers: { Accept: 'application/json' },
+    });
+
+    if (response.ok) {
+      status.textContent = `Gracias, ${nombre}. Recibimos tu consulta y te vamos a contactar en menos de 24 horas.`;
+      form.reset();
+    } else {
+      status.textContent = 'No pudimos enviar tu consulta. Intenta nuevamente o escríbenos por WhatsApp.';
+    }
+  } catch (error) {
+    status.textContent = 'No pudimos enviar tu consulta. Revisa tu conexión e intenta nuevamente.';
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
 // Año dinámico en el footer
