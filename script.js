@@ -79,6 +79,7 @@ form.addEventListener('submit', async (event) => {
     });
 
     if (response.ok) {
+      alert(`¡Gracias, ${nombre}! Recibimos tu consulta con éxito.`);
       status.textContent = `Gracias, ${nombre}. Recibimos tu consulta y te vamos a contactar en menos de 24 horas.`;
       form.reset();
     } else {
