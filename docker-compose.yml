@@ -1,13 +1,17 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Imagen con la extensión pgvector preinstalada (superset de postgres:16,
+    # sirve igual para la base de n8n que para la base vectorial del RAG).
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      RAG_DB: ${RAG_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -35,8 +39,37 @@ services:
       N8N_BASIC_AUTH_ACTIVE: "true"
       N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
       N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      # Usadas por workflows/whatsapp-rag-inbound.json vía expresiones $env.*
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION}
+      WHISPER_API_URL: ${WHISPER_API_URL}
+      WHISPER_API_KEY: ${WHISPER_API_KEY}
+      WHISPER_MODEL: ${WHISPER_MODEL}
+      RAG_API_URL: ${RAG_API_URL}
+      RAG_API_KEY: ${RAG_API_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  rag:
+    build: ./rag-service
+    restart: unless-stopped
+    ports:
+      - "${RAG_PORT}:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${RAG_DB}
+      RAG_API_KEY: ${RAG_API_KEY}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_LLM_MODEL: ${OPENAI_LLM_MODEL}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL}
     depends_on:
       postgres:
         condition: service_healthy
