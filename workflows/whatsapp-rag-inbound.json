@@ -1,0 +1,352 @@
+{
+  "name": "Falcon - WhatsApp Inbound (RAG + Whisper)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Meta Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-400, -200],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp/webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "2",
+      "name": "Check Verify Token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-160, -200],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.query[\"hub.verify_token\"] }}",
+              "rightValue": "={{ $env.WHATSAPP_VERIFY_TOKEN }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "3",
+      "name": "Respond Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [100, -280],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query[\"hub.challenge\"] }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Reject Verify",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [100, -120],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": { "responseCode": 403 }
+      }
+    },
+    {
+      "id": "5",
+      "name": "Meta Events (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-400, 200],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp/webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "6",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 200],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  // Delivery/read receipts or other callbacks with no user message\n  return [{ json: { hasMessage: false } }];\n}\n\nconst contact = value.contacts?.[0];\nconst from = message.from;\nconst type = message.type;\n\nlet text = null;\nlet mediaId = null;\n\nif (type === 'text') {\n  text = message.text.body;\n} else if (type === 'audio') {\n  mediaId = message.audio.id;\n} else if (type === 'button') {\n  text = message.button?.text;\n} else if (type === 'interactive') {\n  text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;\n}\n\nreturn [{\n  json: {\n    hasMessage: true,\n    from,\n    type,\n    text,\n    mediaId,\n    waMessageId: message.id,\n    contactName: contact?.profile?.name || null,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "7",
+      "name": "Has Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [80, 200],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasMessage }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Ack No-op",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [320, 340],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"ignored\" } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "9",
+      "name": "Is Audio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [320, 100],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "audio",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "10",
+      "name": "Get Media URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, -40],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION }}/{{ $json.mediaId }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "11",
+      "name": "Download Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, -40],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "file" } }
+        }
+      }
+    },
+    {
+      "id": "12",
+      "name": "Whisper Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, -40],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHISPER_API_URL }}/v1/audio/transcriptions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHISPER_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
+            { "parameterType": "formData", "name": "model", "value": "={{ $env.WHISPER_MODEL || 'whisper-1' }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "13",
+      "name": "Use Text As-Is",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [560, 240],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "text", "type": "string", "value": "={{ $json.text }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "14",
+      "name": "Merge Text",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1280, 100],
+      "parameters": { "mode": "chooseBranch", "output": "input1" }
+    },
+    {
+      "id": "15",
+      "name": "Query RAG (LlamaIndex)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1520, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_URL }}/query",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: $json.text, session_id: $('Extract Message').first().json.from } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "16",
+      "name": "Format Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 100],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst answer = $json.answer || $json.response || 'Lo siento, no pude procesar tu mensaje en este momento.';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body: answer },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "17",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION }}/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "18",
+      "name": "Ack Event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2240, 100],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"ok\" } }}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Meta Verify (GET)": {
+      "main": [[{ "node": "Check Verify Token", "type": "main", "index": 0 }]]
+    },
+    "Check Verify Token": {
+      "main": [
+        [{ "node": "Respond Challenge", "type": "main", "index": 0 }],
+        [{ "node": "Reject Verify", "type": "main", "index": 0 }]
+      ]
+    },
+    "Meta Events (POST)": {
+      "main": [[{ "node": "Extract Message", "type": "main", "index": 0 }]]
+    },
+    "Extract Message": {
+      "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]]
+    },
+    "Has Message?": {
+      "main": [
+        [{ "node": "Is Audio?", "type": "main", "index": 0 }],
+        [{ "node": "Ack No-op", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Audio?": {
+      "main": [
+        [{ "node": "Get Media URL", "type": "main", "index": 0 }],
+        [{ "node": "Use Text As-Is", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Media URL": {
+      "main": [[{ "node": "Download Audio", "type": "main", "index": 0 }]]
+    },
+    "Download Audio": {
+      "main": [[{ "node": "Whisper Transcribe", "type": "main", "index": 0 }]]
+    },
+    "Whisper Transcribe": {
+      "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]]
+    },
+    "Use Text As-Is": {
+      "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]]
+    },
+    "Merge Text": {
+      "main": [[{ "node": "Query RAG (LlamaIndex)", "type": "main", "index": 0 }]]
+    },
+    "Query RAG (LlamaIndex)": {
+      "main": [[{ "node": "Format Reply", "type": "main", "index": 0 }]]
+    },
+    "Format Reply": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    },
+    "Send WhatsApp Reply": {
+      "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
