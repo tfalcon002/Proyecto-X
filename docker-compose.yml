@@ -49,6 +49,16 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL}
       RAG_API_URL: ${RAG_API_URL}
       RAG_API_KEY: ${RAG_API_KEY}
+      # Usadas por el mismo workflow para agendar citas (Cal.com) y disparar
+      # notificaciones multicanal (Novu) — ver workflows/README.md
+      CALCOM_API_URL: ${CALCOM_API_URL}
+      CALCOM_API_KEY: ${CALCOM_API_KEY}
+      CALCOM_API_VERSION: ${CALCOM_API_VERSION}
+      CALCOM_EVENT_TYPE_ID: ${CALCOM_EVENT_TYPE_ID}
+      CALCOM_TIMEZONE: ${CALCOM_TIMEZONE}
+      NOVU_API_URL: ${NOVU_API_URL}
+      NOVU_API_KEY: ${NOVU_API_KEY}
+      NOVU_WORKFLOW_ID: ${NOVU_WORKFLOW_ID}
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:

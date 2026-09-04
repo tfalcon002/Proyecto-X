@@ -1,5 +1,5 @@
 {
-  "name": "Falcon - WhatsApp Inbound (RAG + Whisper)",
+  "name": "Falcon - WhatsApp Inbound (RAG + Whisper + Cal.com + Novu)",
   "active": false,
   "nodes": [
     {
@@ -226,11 +226,67 @@
       "parameters": { "mode": "chooseBranch", "output": "input1" }
     },
     {
+      "id": "19",
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 100],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const raw = ($json.text || '').trim();\nconst text = raw.toLowerCase();\n\n// MVP por palabras clave. Para mayor precisión, reemplazar por una\n// clasificación vía LLM (ver \"Pendiente\" en workflows/README.md).\nconst bookingKeywords = ['confirmar', 'confirmo', 'reservar', 'agendar el', 'book', 'agendo'];\nconst availabilityKeywords = ['disponibilidad', 'horarios', 'horario', 'agendar', 'agenda', 'cita', 'citas', 'appointment', 'schedule', 'availability', 'reunión', 'reunion', 'llamada', 'call'];\n\nconst hasDateTime = /\\d{4}-\\d{2}-\\d{2}[t ]\\d{2}:\\d{2}/i.test(text);\nconst hasEmail = /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test(text);\n\nlet intent = 'rag';\nif (bookingKeywords.some((k) => text.includes(k)) || (hasDateTime && hasEmail)) {\n  intent = 'booking';\n} else if (availabilityKeywords.some((k) => text.includes(k))) {\n  intent = 'availability';\n}\n\nreturn [{ json: { ...$json, intent } }];\n"
+      }
+    },
+    {
+      "id": "20",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1760, 100],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "booking",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "booking"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "availability",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "availability"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      }
+    },
+    {
       "id": "15",
       "name": "Query RAG (LlamaIndex)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1520, 100],
+      "position": [2000, -140],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.RAG_API_URL }}/query",
@@ -253,10 +309,167 @@
       "name": "Format Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1760, 100],
+      "position": [2240, -140],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const phone = $('Extract Message').first().json.from;\nconst answer = $json.answer || $json.response || 'Lo siento, no pude procesar tu mensaje en este momento.';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body: answer },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "21",
+      "name": "Compute Availability Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 100],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const now = new Date();\nconst end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    ...$json,\n    availabilityStart: now.toISOString(),\n    availabilityEnd: end.toISOString(),\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "22",
+      "name": "Get Cal.com Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2240, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CALCOM_API_URL }}/slots",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "eventTypeId", "value": "={{ $env.CALCOM_EVENT_TYPE_ID }}" },
+            { "name": "startTime", "value": "={{ $json.availabilityStart }}" },
+            { "name": "endTime", "value": "={{ $json.availabilityEnd }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.CALCOM_API_KEY }}" },
+            { "name": "cal-api-version", "value": "={{ $env.CALCOM_API_VERSION }}" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      }
+    },
+    {
+      "id": "23",
+      "name": "Format Availability Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2480, 100],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst data = $json.data || {};\nconst allSlots = Object.values(data).flat();\nconst times = allSlots.slice(0, 5).map((slot) => slot.time || slot.start).filter(Boolean);\n\nlet body;\nif (times.length === 0) {\n  body = 'No encontré horarios disponibles en los próximos días. Probá pedir otra fecha o escribinos más tarde.';\n} else {\n  const list = times.map((t) => `• ${t}`).join('\\n');\n  body = `Estos son los próximos horarios disponibles:\\n${list}\\n\\nPara confirmar, respondé con la fecha/hora elegida y tu email en un solo mensaje, por ejemplo:\\n2026-09-10T15:00 tu-email@ejemplo.com`;\n}\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "24",
+      "name": "Extract Booking Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 340],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const contactName = $('Extract Message').first().json.contactName || 'Cliente Falcon';\nconst text = $json.text || '';\n\nconst dateTimeMatch = text.match(/\\d{4}-\\d{2}-\\d{2}[t ]\\d{2}:\\d{2}(:\\d{2})?/i);\nconst emailMatch = text.match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/);\n\nconst hasDetails = Boolean(dateTimeMatch && emailMatch);\n\nreturn [{\n  json: {\n    ...$json,\n    hasDetails,\n    startTime: dateTimeMatch ? dateTimeMatch[0].replace(' ', 'T') : null,\n    attendeeEmail: emailMatch ? emailMatch[0] : null,\n    attendeeName: contactName,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "25",
+      "name": "Has Booking Details?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2240, 340],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasDetails }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "26",
+      "name": "Book Cal.com Appointment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2480, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CALCOM_API_URL }}/bookings",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.CALCOM_API_KEY }}" },
+            { "name": "cal-api-version", "value": "={{ $env.CALCOM_API_VERSION }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { eventTypeId: Number($env.CALCOM_EVENT_TYPE_ID), start: $json.startTime, attendee: { name: $json.attendeeName, email: $json.attendeeEmail, timeZone: $env.CALCOM_TIMEZONE || 'America/Mexico_City' } } }}",
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      }
+    },
+    {
+      "id": "27",
+      "name": "Format Booking Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2720, 260],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst startTime = $('Extract Booking Details').first().json.startTime;\nconst success = !$json.error && ($json.status === 'success' || $json.id || $json.uid);\n\nconst body = success\n  ? `¡Listo! Tu cita quedó agendada para ${startTime}. Te llegará la confirmación por email.`\n  : `No pude confirmar la cita (${$json.error?.message || 'horario no disponible'}). Probá con otro horario.`;\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "28",
+      "name": "Format Missing Details Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2480, 460],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst body = 'Para agendar necesito la fecha/hora y tu email en un solo mensaje, por ejemplo:\\n2026-09-10T15:00 tu-email@ejemplo.com';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "29",
+      "name": "Trigger Novu Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2720, 420],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOVU_API_URL }}/v1/events/trigger",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=ApiKey {{ $env.NOVU_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { name: $env.NOVU_WORKFLOW_ID, to: { subscriberId: $('Extract Message').first().json.from, email: $('Extract Booking Details').first().json.attendeeEmail }, payload: { startTime: $('Extract Booking Details').first().json.startTime, attendeeName: $('Extract Booking Details').first().json.attendeeName, bookingStatus: $json.error ? 'failed' : 'confirmed' } } }}",
+        "options": {
+          "response": { "response": { "neverError": true } }
+        },
+        "continueOnFail": true
       }
     },
     {
@@ -264,7 +477,7 @@
       "name": "Send WhatsApp Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 100],
+      "position": [2960, 100],
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION }}/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
@@ -287,7 +500,7 @@
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2240, 100],
+      "position": [3200, 100],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { status: \"ok\" } }}",
@@ -336,12 +549,54 @@
       "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]]
     },
     "Merge Text": {
-      "main": [[{ "node": "Query RAG (LlamaIndex)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Detect Intent", "type": "main", "index": 0 }]]
+    },
+    "Detect Intent": {
+      "main": [[{ "node": "Route by Intent", "type": "main", "index": 0 }]]
+    },
+    "Route by Intent": {
+      "main": [
+        [{ "node": "Extract Booking Details", "type": "main", "index": 0 }],
+        [{ "node": "Compute Availability Window", "type": "main", "index": 0 }],
+        [{ "node": "Query RAG (LlamaIndex)", "type": "main", "index": 0 }]
+      ]
     },
     "Query RAG (LlamaIndex)": {
       "main": [[{ "node": "Format Reply", "type": "main", "index": 0 }]]
     },
     "Format Reply": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    },
+    "Compute Availability Window": {
+      "main": [[{ "node": "Get Cal.com Availability", "type": "main", "index": 0 }]]
+    },
+    "Get Cal.com Availability": {
+      "main": [[{ "node": "Format Availability Reply", "type": "main", "index": 0 }]]
+    },
+    "Format Availability Reply": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    },
+    "Extract Booking Details": {
+      "main": [[{ "node": "Has Booking Details?", "type": "main", "index": 0 }]]
+    },
+    "Has Booking Details?": {
+      "main": [
+        [{ "node": "Book Cal.com Appointment", "type": "main", "index": 0 }],
+        [{ "node": "Format Missing Details Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Book Cal.com Appointment": {
+      "main": [
+        [
+          { "node": "Format Booking Confirmation", "type": "main", "index": 0 },
+          { "node": "Trigger Novu Notification", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Booking Confirmation": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    },
+    "Format Missing Details Reply": {
       "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
     },
     "Send WhatsApp Reply": {
