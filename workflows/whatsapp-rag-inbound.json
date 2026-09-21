@@ -69,7 +69,66 @@
         "httpMethod": "POST",
         "path": "whatsapp/webhook",
         "responseMode": "responseNode",
-        "options": {}
+        "options": { "rawBody": true }
+      }
+    },
+    {
+      "id": "30",
+      "name": "Compute Meta Signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [-400, 380],
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "secret": "={{ $env.WHATSAPP_APP_SECRET }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "encoding": "hex",
+        "propertyName": "computedSignature"
+      }
+    },
+    {
+      "id": "31",
+      "name": "Verify Meta Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 380],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const webhookItem = $('Meta Events (POST)').first().json;\nconst headerSignature = webhookItem.headers?.['x-hub-signature-256'] || '';\nconst expected = `sha256=${$json.computedSignature}`;\n\n// Reconstruimos el body a partir del raw body verificado, en vez de\n// confiar en el parseo automático de n8n (así el JSON que llega a\n// \"Extract Message\" es exactamente el que Meta firmó).\nconst rawBodyBase64 = $input.first().binary?.data?.data;\nconst rawBodyString = rawBodyBase64 ? Buffer.from(rawBodyBase64, 'base64').toString('utf8') : '';\n\nlet parsedBody = webhookItem.body;\ntry {\n  if (rawBodyString) parsedBody = JSON.parse(rawBodyString);\n} catch (e) {\n  // si falla el parseo, seguimos con lo que n8n ya haya parseado\n}\n\nconst isValid = Boolean($env.WHATSAPP_APP_SECRET) && headerSignature === expected;\n\nreturn [{\n  json: {\n    headers: webhookItem.headers,\n    body: parsedBody,\n    signatureValid: isValid,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "32",
+      "name": "Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [80, 380],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.signatureValid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "33",
+      "name": "Reject Invalid Signature",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [320, 480],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"invalid_signature\" } }}",
+        "options": { "responseCode": 403 }
       }
     },
     {
@@ -519,7 +578,19 @@
       ]
     },
     "Meta Events (POST)": {
-      "main": [[{ "node": "Extract Message", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Compute Meta Signature", "type": "main", "index": 0 }]]
+    },
+    "Compute Meta Signature": {
+      "main": [[{ "node": "Verify Meta Signature", "type": "main", "index": 0 }]]
+    },
+    "Verify Meta Signature": {
+      "main": [[{ "node": "Signature Valid?", "type": "main", "index": 0 }]]
+    },
+    "Signature Valid?": {
+      "main": [
+        [{ "node": "Extract Message", "type": "main", "index": 0 }],
+        [{ "node": "Reject Invalid Signature", "type": "main", "index": 0 }]
+      ]
     },
     "Extract Message": {
       "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]]
