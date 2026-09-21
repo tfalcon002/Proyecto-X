@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/hallmark/SKILL.md",
       "computedHash": "579f86b27cdd7eb972107f7aecedd537f472891c5fd7c7c821bea15f64e0fe86"
+    },
+    "apple-design": {
+      "source": "Kit de 9 Skills (documento de entrega, distribuido como apple-design.skill vía Google Drive)",
+      "sourceType": "file",
+      "skillPath": "apple-design/SKILL.md",
+      "computedHash": "11840b24a11d7f94f39c6aaab074750ae4e4de4ef54ee4b1dd97e16ebd485e61"
     }
   }
 }
