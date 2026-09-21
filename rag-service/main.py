@@ -5,19 +5,28 @@ Microservicio de ingesta y consulta de documentos sobre LlamaIndex,
 con pgvector (Postgres) como almacén vectorial. Pensado para ser
 llamado internamente por n8n (ver workflows/whatsapp-rag-inbound.json).
 
+Multitenant: todos los clientes de Falcon comparten la misma tabla de
+documentos (`falcon_documents`), separados por `client_id` (guardado en
+el metadata de cada documento y usado para filtrar cada consulta). El
+`client_id` debe existir en la tabla `clients` (ver postgres-init/) antes
+de poder ingestar o consultar.
+
 Endpoints:
   GET  /health
-  POST /ingest  -> agrega documentos al índice
-  POST /query   -> responde una pregunta usando los documentos indexados
+  POST /clients -> registra un client_id nuevo
+  POST /ingest  -> agrega documentos al índice, asociados a un client_id
+  POST /query   -> responde una pregunta usando los documentos de ese client_id
 """
 
 import os
 from urllib.parse import urlparse
 
+import psycopg2
 from fastapi import Depends, FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
+from llama_index.core.vector_stores import MetadataFilter, MetadataFilters
 from llama_index.vector_stores.postgres import PGVectorStore
 
 RAG_API_KEY = os.environ.get("RAG_API_KEY")
@@ -97,7 +106,29 @@ def require_api_key(authorization: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _client_exists(client_id: str) -> bool:
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM clients WHERE client_id = %s", (client_id,))
+            return cur.fetchone() is not None
+
+
+def require_known_client(client_id: str) -> None:
+    if not _client_exists(client_id):
+        raise HTTPException(status_code=404, detail=f"Unknown client_id: {client_id}")
+
+
 app = FastAPI(title="Falcon RAG Service")
+
+
+class ClientCreateRequest(BaseModel):
+    client_id: str
+    name: str
+
+
+class ClientResponse(BaseModel):
+    client_id: str
+    name: str
 
 
 class IngestDocument(BaseModel):
@@ -107,6 +138,7 @@ class IngestDocument(BaseModel):
 
 
 class IngestRequest(BaseModel):
+    client_id: str
     documents: list[IngestDocument]
 
 
@@ -115,6 +147,7 @@ class IngestResponse(BaseModel):
 
 
 class QueryRequest(BaseModel):
+    client_id: str
     query: str
     session_id: str | None = None
     top_k: int = 4
@@ -130,10 +163,32 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.post("/clients", response_model=ClientResponse, dependencies=[Depends(require_api_key)])
+def create_client(payload: ClientCreateRequest) -> ClientResponse:
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO clients (client_id, name)
+                VALUES (%s, %s)
+                ON CONFLICT (client_id) DO UPDATE SET name = EXCLUDED.name
+                """,
+                (payload.client_id, payload.name),
+            )
+    return ClientResponse(client_id=payload.client_id, name=payload.name)
+
+
 @app.post("/ingest", response_model=IngestResponse, dependencies=[Depends(require_api_key)])
 def ingest(payload: IngestRequest) -> IngestResponse:
+    require_known_client(payload.client_id)
     documents = [
-        Document(text=doc.text, doc_id=doc.id, metadata=doc.metadata)
+        Document(
+            # Prefijado con el client_id para que dos clientes no puedan
+            # pisarse el mismo doc_id en la tabla compartida.
+            doc_id=f"{payload.client_id}:{doc.id}" if doc.id else None,
+            text=doc.text,
+            metadata={**doc.metadata, "client_id": payload.client_id},
+        )
         for doc in payload.documents
     ]
     index = get_index()
@@ -144,8 +199,10 @@ def ingest(payload: IngestRequest) -> IngestResponse:
 
 @app.post("/query", response_model=QueryResponse, dependencies=[Depends(require_api_key)])
 def query(payload: QueryRequest) -> QueryResponse:
+    require_known_client(payload.client_id)
     index = get_index()
-    query_engine = index.as_query_engine(similarity_top_k=payload.top_k)
+    filters = MetadataFilters(filters=[MetadataFilter(key="client_id", value=payload.client_id)])
+    query_engine = index.as_query_engine(similarity_top_k=payload.top_k, filters=filters)
     result = query_engine.query(payload.query)
     sources = [node.node.get_content()[:200] for node in result.source_nodes]
     return QueryResponse(answer=str(result), sources=sources)
