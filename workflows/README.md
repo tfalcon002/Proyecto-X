@@ -14,7 +14,10 @@ además dispara una notificación multicanal vía Novu.
 Meta Verify (GET)  ──► Check Verify Token ──► Respond Challenge / Reject Verify
                                                (handshake inicial de Meta)
 
-Meta Events (POST) ──► Extract Message ──► Has Message? ──(no)──► Ack No-op
+Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──► 403 Forbidden
+                                    │(válida)
+                                    ▼
+                            Extract Message ──► Has Message? ──(no)──► Ack No-op
                                                │(sí)
                                                ▼
                                           Is Audio?
@@ -54,6 +57,30 @@ Confirm.  (fire-and-forget)                            ▼
 La clasificación de intención (`Detect Intent`) es por palabras clave — ver
 "Pendiente" más abajo para la limitación y el camino de mejora.
 
+### Verificación de firma de Meta (`X-Hub-Signature-256`)
+
+Antes de procesar cualquier evento `POST`, el workflow valida que el request
+venga realmente de Meta:
+
+1. `Meta Events (POST)` tiene activado `rawBody` en sus opciones — necesario
+   porque la firma se calcula sobre los bytes exactos del body, no sobre el
+   JSON ya parseado (re-serializarlo puede cambiar espacios/orden y romper
+   la comparación).
+2. `Compute Meta Signature` (nodo `Crypto`, no un `Code` node) calcula el
+   HMAC-SHA256 del raw body usando `WHATSAPP_APP_SECRET` como clave.
+3. `Verify Meta Signature` compara ese resultado (con el prefijo `sha256=`)
+   contra el header `X-Hub-Signature-256` que mandó Meta, y reconstruye el
+   `body` a partir del raw body ya verificado (no del parseo automático de
+   n8n), para que lo que llega a `Extract Message` sea exactamente lo que
+   Meta firmó.
+4. `Signature Valid?` corta el flujo con `403 Forbidden` si no coincide —
+   **falla cerrado**: si `WHATSAPP_APP_SECRET` está vacío, todos los eventos
+   se rechazan (ver tabla de variables).
+
+`WHATSAPP_APP_SECRET` **no es el mismo valor** que `WHATSAPP_ACCESS_TOKEN`:
+es el "App Secret" de la app de Meta (Configuración → Básica), no un token
+de acceso a la Graph API.
+
 ### Importar en n8n
 
 1. Abrir n8n → menú (⋮) → **Import from File** → seleccionar
@@ -62,7 +89,10 @@ La clasificación de intención (`Detect Intent`) es por palabras clave — ver
    parámetros de autenticación/body pueden variar levemente según la
    versión de n8n; el nodo `Merge Text` en particular conviene confirmarlo
    manualmente (modo "Choose Branch": debe tomar los datos de la rama que
-   sí se ejecutó, audio o texto).
+   sí se ejecutó, audio o texto). Lo mismo con `Compute Meta Signature`
+   (nodo `Crypto`): confirmar que quedaron seleccionados "HMAC" / "SHA256" /
+   modo binario sobre la propiedad `data`, ya que los nombres exactos de
+   estos campos varían entre versiones de n8n.
 3. Activar el workflow solo después de configurar las variables de entorno
    (siguiente sección) y el webhook en Meta.
 
@@ -78,6 +108,7 @@ falta completarlas en tu `.env` (ver `.env.example`).
 | `WHATSAPP_ACCESS_TOKEN` | Bearer token para llamar a la Graph API (leer media, enviar mensajes) | Meta App → WhatsApp → API Setup (usar un token de **usuario del sistema**, no el temporal de 24h) |
 | `WHATSAPP_PHONE_NUMBER_ID` | ID del número de WhatsApp Business que envía las respuestas | Meta App → WhatsApp → API Setup |
 | `META_GRAPH_API_VERSION` | Versión de la Graph API a usar (ej. `v20.0`) | Documentación de Meta, actualizar periódicamente |
+| `WHATSAPP_APP_SECRET` | Clave para validar la firma `X-Hub-Signature-256` de cada webhook entrante | Meta App → Configuración → Básica (**no** es `WHATSAPP_ACCESS_TOKEN`) |
 | `WHISPER_API_URL` | Endpoint compatible con la API de transcripción de OpenAI (`/v1/audio/transcriptions`) | Servidor propio (Whisper self-hosted) o `https://api.openai.com` |
 | `WHISPER_API_KEY` | Bearer token del servicio anterior | Vacío si el servidor local no exige auth |
 | `WHISPER_MODEL` | Nombre del modelo a usar (default `whisper-1` en el nodo si no se define) | Depende del servidor Whisper elegido |
@@ -131,8 +162,6 @@ En el dashboard de la app de Meta (WhatsApp → Configuration):
 
 ### Pendiente / próximos pasos
 
-- No valida la firma `X-Hub-Signature-256` de Meta (recomendado antes de
-  producción, para confirmar que el request viene realmente de Meta).
 - Responde de forma síncrona (Meta espera la respuesta del webhook antes
   de los ~20s de timeout); si la consulta RAG o Cal.com es lenta, conviene
   separar en "ack inmediato" + procesamiento asíncrono en un flujo aparte.
@@ -154,3 +183,6 @@ En el dashboard de la app de Meta (WhatsApp → Configuration):
   (`NOVU_WORKFLOW_ID`) ya está creado y sus canales (email/SMS/etc.)
   configurados desde el dashboard de Novu — este repo no lo crea ni lo
   gestiona, solo dispara el evento.
+- Si activás el workflow **antes** de configurar `WHATSAPP_APP_SECRET`, todo
+  mensaje entrante quedará rechazado con `403` (falla cerrado, a propósito) —
+  confirmar la variable en el `.env` antes de suscribir el webhook en Meta.
