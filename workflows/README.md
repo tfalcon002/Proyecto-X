@@ -48,9 +48,10 @@ Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──�
      │      │            │               │                       │
      ▼      ▼            └───────────────┴───────────┬───────────┘
 Format    Trigger Novu                                ▼
-Booking   Notification                       Send WhatsApp Reply
-Confirm.  (fire-and-forget)                            ▼
-     │                                              Ack Event
+Booking   Notification               ┌─── Send WhatsApp Reply
+Confirm.  (fire-and-forget)          │                ▼
+     │                               │             Ack Event
+     │                               └─── Log Interaction (fire-and-forget)
      └──────────────────────────────────────────────────┘
 ```
 
@@ -112,8 +113,9 @@ falta completarlas en tu `.env` (ver `.env.example`).
 | `WHISPER_API_URL` | Endpoint compatible con la API de transcripción de OpenAI (`/v1/audio/transcriptions`) | Servidor propio (Whisper self-hosted) o `https://api.openai.com` |
 | `WHISPER_API_KEY` | Bearer token del servicio anterior | Vacío si el servidor local no exige auth |
 | `WHISPER_MODEL` | Nombre del modelo a usar (default `whisper-1` en el nodo si no se define) | Depende del servidor Whisper elegido |
-| `RAG_API_URL` | Endpoint del servicio RAG/LlamaIndex que responde `{ "answer": "..." }` | Servicio interno de Falcon (`rag-service/`) |
+| `RAG_API_URL` | Endpoint del servicio RAG/LlamaIndex (`/query` responde `{ "answer": "..." }`, `/interactions` registra el historial) | Servicio interno de Falcon (`rag-service/`) |
 | `RAG_API_KEY` | Bearer token del servicio RAG, si aplica | Interno |
+| `FALCON_CLIENT_ID` | `client_id` del tenant que atiende esta instancia de n8n; se manda en cada `/query` y `/interactions` al RAG | Debe existir en la tabla `clients` del RAG (registrarlo antes con `POST /clients`, ver `rag-service/README.md`) |
 | `CALCOM_API_URL` | Base de la API v2 de Cal.com | Normalmente `https://api.cal.com/v2` |
 | `CALCOM_API_KEY` | Bearer token para leer disponibilidad y crear reservas | Cal.com → Settings → Developer → API Keys |
 | `CALCOM_API_VERSION` | Valor del header `cal-api-version` que exige la API v2 | Cal.com → docs de versionado de la API |
@@ -151,6 +153,18 @@ bloquea la respuesta al usuario por WhatsApp) contra
 de WhatsApp como `subscriberId`, y el resultado de la reserva en el
 `payload`. El Workflow de Novu (`NOVU_WORKFLOW_ID`) es quien decide los
 canales reales (email, SMS, push, in-app) — no se configuran acá.
+
+### Historial de interacciones (`Log Interaction`)
+
+Las cuatro ramas de respuesta (`Format Reply`, `Format Availability Reply`,
+`Format Booking Confirmation`, `Format Missing Details Reply`) disparan en
+paralelo a `Send WhatsApp Reply` el nodo `Log Interaction`
+(fire-and-forget: su falla no bloquea la respuesta al usuario), que llama a
+`POST /interactions` del RAG con el `client_id` (`FALCON_CLIENT_ID`), el
+teléfono, la intención detectada, el mensaje original del usuario y la
+respuesta final que se le mandó. Queda guardado en la tabla
+`agente_interacciones` (ver `postgres-init/init-rag-db.sh` y
+`rag-service/README.md`).
 
 ### Configurar el webhook en Meta
 

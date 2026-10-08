@@ -50,6 +50,7 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL}
       RAG_API_URL: ${RAG_API_URL}
       RAG_API_KEY: ${RAG_API_KEY}
+      FALCON_CLIENT_ID: ${FALCON_CLIENT_ID}
       # Usadas por el mismo workflow para agendar citas (Cal.com) y disparar
       # notificaciones multicanal (Novu) — ver workflows/README.md
       CALCOM_API_URL: ${CALCOM_API_URL}
