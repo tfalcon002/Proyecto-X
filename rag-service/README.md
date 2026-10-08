@@ -12,8 +12,10 @@ misma tabla de documentos, aislados por `client_id`.
 n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "falcon_rag", extensión pgvector)
                      │                              │
                      │                              ├── tabla "clients" (registro de client_id)
-                     │                              └── tabla "falcon_documents" (compartida,
-                     │                                  cada fila con client_id en su metadata)
+                     │                              ├── tabla "falcon_documents" (compartida,
+                     │                              │   cada fila con client_id en su metadata)
+                     │                              └── tabla "agente_interacciones" (historial
+                     │                                  de mensajes + respuestas, por client_id)
                      ├── Embeddings: OpenAI o Ollama (según EMBEDDING_PROVIDER)
                      └── LLM de respuesta: OpenAI o Ollama (según LLM_PROVIDER)
 ```
@@ -48,10 +50,13 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
 | POST | `/clients` | `{"client_id": "...", "name": "..."}` | Registra (o actualiza el nombre de) un cliente de Falcon |
 | POST | `/ingest` | `{"client_id": "...", "documents": [{"id": "...", "text": "...", "metadata": {}}]}` | Indexa uno o más documentos para ese cliente |
 | POST | `/query` | `{"client_id": "...", "query": "...", "session_id": "...", "top_k": 4}` | Devuelve `{"answer": "...", "sources": [...]}` filtrado a los documentos de ese cliente |
+| POST | `/interactions` | `{"client_id": "...", "channel": "whatsapp", "from_number": "...", "intent": "...", "user_message": "...", "agent_response": "...", "wa_message_id": "...", "session_id": "..."}` | Registra una interacción en el historial (`agente_interacciones`); devuelve `{"id", "client_id", "created_at"}` |
 
-Los tres endpoints (salvo `/health`) requieren `Authorization: Bearer
-$RAG_API_KEY` si esa variable está configurada. `/ingest` y `/query`
-devuelven `404` si el `client_id` no existe en la tabla `clients`.
+Los cuatro endpoints (salvo `/health`) requieren `Authorization: Bearer
+$RAG_API_KEY` si esa variable está configurada. `/ingest`, `/query` e
+`/interactions` devuelven `404` si el `client_id` no existe en la tabla
+`clients`. En `/interactions` todos los campos salvo `client_id` son
+opcionales — se guarda lo que el workflow mande en ese momento.
 
 ## Cómo probarlo en local
 
@@ -72,6 +77,11 @@ curl -X POST http://localhost:${RAG_PORT}/ingest \
 curl -X POST http://localhost:${RAG_PORT}/query \
   -H "Authorization: Bearer $RAG_API_KEY" -H "Content-Type: application/json" \
   -d '{"client_id": "acme", "query": "¿Qué automatiza Falcon?"}'
+
+# 4. Registrar la interacción (lo que hace el nodo "Log Interaction" de n8n)
+curl -X POST http://localhost:${RAG_PORT}/interactions \
+  -H "Authorization: Bearer $RAG_API_KEY" -H "Content-Type: application/json" \
+  -d '{"client_id": "acme", "channel": "whatsapp", "from_number": "5215512345678", "intent": "rag", "user_message": "¿Qué automatiza Falcon?", "agent_response": "Falcon automatiza WhatsApp, Instagram y CRM con agentes de IA."}'
 ```
 
 ## Pendiente / próximos pasos
@@ -87,12 +97,17 @@ curl -X POST http://localhost:${RAG_PORT}/query \
   deployment que ya tenga datos, la tabla `clients` no se crea sola — hay
   que aplicarla a mano o migrar a una herramienta de migraciones real
   antes de que haya datos en producción.
-- El workflow de n8n (`workflows/whatsapp-rag-inbound.json`) todavía **no
-  manda `client_id`** al llamar a `/query` — sigue siendo de un solo
-  tenant (una instancia de n8n por cliente de Falcon). Enrutar múltiples
-  clientes desde una misma instancia de n8n (ej. mapeando
-  `phone_number_id` del webhook de Meta a un `client_id`) es una fase
-  aparte, todavía no implementada.
+- El workflow de n8n (`workflows/whatsapp-rag-inbound.json`) manda el
+  `client_id` fijo de la variable `FALCON_CLIENT_ID` en `/query` y
+  `/interactions` — sigue siendo de un solo tenant (una instancia de n8n
+  por cliente de Falcon). Enrutar múltiples clientes desde una misma
+  instancia de n8n (ej. mapeando `phone_number_id` del webhook de Meta a
+  un `client_id`) es una fase aparte, todavía no implementada.
+- `/interactions` no valida que `agent_response` corresponda realmente a
+  lo que WhatsApp confirmó como entregado (`Log Interaction` corre en
+  paralelo a `Send WhatsApp Reply`, no después): si el envío a WhatsApp
+  falla, el historial puede tener una respuesta que nunca llegó al
+  usuario.
 - No hay endpoint de ingesta masiva desde archivos (PDF, docx, etc.) — hoy
   solo acepta texto plano ya extraído. Se puede sumar `MarkItDown` (de la
   tabla de herramientas evaluadas en la Fase de research) como paso previo

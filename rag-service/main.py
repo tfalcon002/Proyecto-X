@@ -13,9 +13,11 @@ de poder ingestar o consultar.
 
 Endpoints:
   GET  /health
-  POST /clients -> registra un client_id nuevo
-  POST /ingest  -> agrega documentos al índice, asociados a un client_id
-  POST /query   -> responde una pregunta usando los documentos de ese client_id
+  POST /clients      -> registra un client_id nuevo
+  POST /ingest       -> agrega documentos al índice, asociados a un client_id
+  POST /query        -> responde una pregunta usando los documentos de ese client_id
+  POST /interactions -> registra una interacción (mensaje + respuesta) en el
+                        historial del agente (tabla agente_interacciones)
 """
 
 import os
@@ -158,6 +160,23 @@ class QueryResponse(BaseModel):
     sources: list[str] = []
 
 
+class InteractionCreateRequest(BaseModel):
+    client_id: str
+    channel: str = "whatsapp"
+    from_number: str | None = None
+    intent: str | None = None
+    user_message: str | None = None
+    agent_response: str | None = None
+    wa_message_id: str | None = None
+    session_id: str | None = None
+
+
+class InteractionResponse(BaseModel):
+    id: int
+    client_id: str
+    created_at: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -206,3 +225,35 @@ def query(payload: QueryRequest) -> QueryResponse:
     result = query_engine.query(payload.query)
     sources = [node.node.get_content()[:200] for node in result.source_nodes]
     return QueryResponse(answer=str(result), sources=sources)
+
+
+@app.post(
+    "/interactions",
+    response_model=InteractionResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def create_interaction(payload: InteractionCreateRequest) -> InteractionResponse:
+    require_known_client(payload.client_id)
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO agente_interacciones
+                    (client_id, channel, from_number, intent, user_message,
+                     agent_response, wa_message_id, session_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, client_id, created_at
+                """,
+                (
+                    payload.client_id,
+                    payload.channel,
+                    payload.from_number,
+                    payload.intent,
+                    payload.user_message,
+                    payload.agent_response,
+                    payload.wa_message_id,
+                    payload.session_id,
+                ),
+            )
+            row = cur.fetchone()
+    return InteractionResponse(id=row[0], client_id=row[1], created_at=row[2].isoformat())

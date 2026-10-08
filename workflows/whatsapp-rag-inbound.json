@@ -359,7 +359,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { query: $json.text, session_id: $('Extract Message').first().json.from } }}",
+        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, query: $json.text, session_id: $('Extract Message').first().json.from } }}",
         "options": {}
       }
     },
@@ -555,6 +555,32 @@
       }
     },
     {
+      "id": "34",
+      "name": "Log Interaction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2960, 260],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_URL }}/interactions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, channel: 'whatsapp', from_number: $json.to, intent: $('Detect Intent').first().json.intent, user_message: $('Extract Message').first().json.text, agent_response: $json.text.body, wa_message_id: $('Extract Message').first().json.waMessageId } }}",
+        "options": {
+          "response": { "response": { "neverError": true } }
+        },
+        "continueOnFail": true
+      }
+    },
+    {
       "id": "18",
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
@@ -636,7 +662,12 @@
       "main": [[{ "node": "Format Reply", "type": "main", "index": 0 }]]
     },
     "Format Reply": {
-      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Log Interaction", "type": "main", "index": 0 }
+        ]
+      ]
     },
     "Compute Availability Window": {
       "main": [[{ "node": "Get Cal.com Availability", "type": "main", "index": 0 }]]
@@ -645,7 +676,12 @@
       "main": [[{ "node": "Format Availability Reply", "type": "main", "index": 0 }]]
     },
     "Format Availability Reply": {
-      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Log Interaction", "type": "main", "index": 0 }
+        ]
+      ]
     },
     "Extract Booking Details": {
       "main": [[{ "node": "Has Booking Details?", "type": "main", "index": 0 }]]
@@ -665,10 +701,20 @@
       ]
     },
     "Format Booking Confirmation": {
-      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Log Interaction", "type": "main", "index": 0 }
+        ]
+      ]
     },
     "Format Missing Details Reply": {
-      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Log Interaction", "type": "main", "index": 0 }
+        ]
+      ]
     },
     "Send WhatsApp Reply": {
       "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]]
