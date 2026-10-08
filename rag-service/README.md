@@ -94,9 +94,11 @@ curl -X POST http://localhost:${RAG_PORT}/interactions \
   manda quien llama.
 - `postgres-init/init-rag-db.sh` solo corre en el primer arranque de un
   volumen nuevo (semántica de `docker-entrypoint-initdb.d`). En un
-  deployment que ya tenga datos, la tabla `clients` no se crea sola — hay
-  que aplicarla a mano o migrar a una herramienta de migraciones real
-  antes de que haya datos en producción.
+  deployment que ya tenga datos, una tabla nueva ahí no se crea sola —
+  hace falta una migración aparte aplicada a mano (ver `migrations/`,
+  por ejemplo `001_create_agente_interacciones.sql`). No hay todavía una
+  herramienta de migraciones real (Alembic, sqitch, etc.) ni un registro
+  de qué migraciones ya corrieron en cada deployment.
 - El workflow de n8n (`workflows/whatsapp-rag-inbound.json`) manda el
   `client_id` fijo de la variable `FALCON_CLIENT_ID` en `/query` y
   `/interactions` — sigue siendo de un solo tenant (una instancia de n8n
