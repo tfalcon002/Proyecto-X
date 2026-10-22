@@ -22,6 +22,8 @@ Endpoints:
                         con ese número (tabla conversaciones_derivadas)
   GET  /handoffs/status -> indica si el bot está en pausa con un número
   DELETE /handoffs   -> reactiva el bot con un número antes de que venza la pausa
+  POST /v1/audio/transcriptions -> transcribe un audio con Gemini; misma forma
+                        que la API de Whisper, así n8n lo usa sin cambios
 
 Memoria: /query lee las últimas interacciones del mismo número
 (agente_interacciones) y responde como una conversación, no como una
@@ -34,7 +36,7 @@ import os
 from urllib.parse import urlparse
 
 import psycopg2
-from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Header, UploadFile
 from pydantic import BaseModel
 
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
@@ -70,7 +72,11 @@ un pedido, pedir una cotización o hablar con una persona, responde \
 
 
 def _configure_settings() -> None:
-    if EMBEDDING_PROVIDER == "ollama":
+    if EMBEDDING_PROVIDER == "gemini":
+        from gemini import gemini_embedding
+
+        Settings.embed_model = gemini_embedding(EMBED_DIM)
+    elif EMBEDDING_PROVIDER == "ollama":
         from llama_index.embeddings.ollama import OllamaEmbedding
 
         Settings.embed_model = OllamaEmbedding(
@@ -85,7 +91,11 @@ def _configure_settings() -> None:
             api_key=os.environ.get("OPENAI_API_KEY"),
         )
 
-    if LLM_PROVIDER == "ollama":
+    if LLM_PROVIDER == "gemini":
+        from gemini import gemini_llm
+
+        Settings.llm = gemini_llm()
+    elif LLM_PROVIDER == "ollama":
         from llama_index.llms.ollama import Ollama
 
         Settings.llm = Ollama(
@@ -315,6 +325,10 @@ class InteractionResponse(BaseModel):
     created_at: str
 
 
+class TranscriptionResponse(BaseModel):
+    text: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -483,3 +497,25 @@ def delete_handoff(client_id: str, from_number: str) -> HandoffResponse:
                 (client_id, from_number),
             )
     return HandoffResponse(client_id=client_id, from_number=from_number, paused=False)
+
+
+@app.post(
+    "/v1/audio/transcriptions",
+    response_model=TranscriptionResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def transcribe_audio(
+    file: UploadFile = File(...),
+    model: str | None = Form(default=None),  # lo manda n8n (formato Whisper); se ignora
+) -> TranscriptionResponse:
+    from gemini import transcribe
+
+    # WhatsApp manda "audio/ogg; codecs=opus"; Gemini quiere el tipo sin parámetros.
+    mime_type = (file.content_type or "audio/ogg").split(";")[0].strip()
+    if mime_type in ("", "application/octet-stream"):
+        mime_type = "audio/ogg"
+    try:
+        text = transcribe(file.file.read(), mime_type)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo transcribir: {exc}") from exc
+    return TranscriptionResponse(text=text)

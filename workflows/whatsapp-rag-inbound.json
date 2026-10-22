@@ -240,11 +240,11 @@
       "position": [1040, -40],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.WHISPER_API_URL }}/v1/audio/transcriptions",
+        "url": "={{ $env.WHISPER_API_URL || $env.RAG_API_URL }}/v1/audio/transcriptions",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.WHISPER_API_KEY }}" }]
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.WHISPER_API_KEY || $env.RAG_API_KEY }}" }]
         },
         "sendBody": true,
         "contentType": "multipart-form-data",
