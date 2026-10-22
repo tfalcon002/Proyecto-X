@@ -229,9 +229,7 @@
             { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" }
           ]
         },
-        "options": {
-          "response": { "response": { "responseFormat": "file" } }
-        }
+        "options": { "response": { "response": { "responseFormat": "file" } } }
       }
     },
     {
@@ -246,16 +244,18 @@
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.WHISPER_API_KEY }}" }
-          ]
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.WHISPER_API_KEY }}" }]
         },
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
           "parameters": [
             { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
-            { "parameterType": "formData", "name": "model", "value": "={{ $env.WHISPER_MODEL || 'whisper-1' }}" }
+            {
+              "parameterType": "formData",
+              "name": "model",
+              "value": "={{ $env.WHISPER_MODEL || 'whisper-1' }}"
+            }
           ]
         },
         "options": {}
@@ -269,9 +269,7 @@
       "position": [560, 240],
       "parameters": {
         "assignments": {
-          "assignments": [
-            { "name": "text", "type": "string", "value": "={{ $json.text }}" }
-          ]
+          "assignments": [{ "name": "text", "type": "string", "value": "={{ $json.text }}" }]
         },
         "options": {}
       }
@@ -292,7 +290,7 @@
       "position": [1520, 100],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "const raw = ($json.text || '').trim();\nconst text = raw.toLowerCase();\n\n// MVP por palabras clave. Para mayor precisión, reemplazar por una\n// clasificación vía LLM (ver \"Pendiente\" en workflows/README.md).\nconst bookingKeywords = ['confirmar', 'confirmo', 'reservar', 'agendar el', 'book', 'agendo'];\nconst availabilityKeywords = ['disponibilidad', 'horarios', 'horario', 'agendar', 'agenda', 'cita', 'citas', 'appointment', 'schedule', 'availability', 'reunión', 'reunion', 'llamada', 'call'];\n\nconst hasDateTime = /\\d{4}-\\d{2}-\\d{2}[t ]\\d{2}:\\d{2}/i.test(text);\nconst hasEmail = /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test(text);\n\nlet intent = 'rag';\nif (bookingKeywords.some((k) => text.includes(k)) || (hasDateTime && hasEmail)) {\n  intent = 'booking';\n} else if (availabilityKeywords.some((k) => text.includes(k))) {\n  intent = 'availability';\n}\n\nreturn [{ json: { ...$json, intent } }];\n"
+        "jsCode": "const raw = ($json.text || '').trim();\nconst text = raw.toLowerCase();\n\n// MVP por palabras clave. Para mayor precisión, reemplazar por una\n// clasificación vía LLM (ver \"Pendiente\" en workflows/README.md).\nconst handoffKeywords = ['hablar con', 'una persona', 'humano', 'ejecutivo', 'asesor', 'vendedor', 'quiero comprar', 'hacer un pedido', 'quiero encargar', 'cotizar', 'cotización', 'cotizacion'];\nconst bookingKeywords = ['confirmar', 'confirmo', 'reservar', 'agendar el', 'book', 'agendo'];\nconst availabilityKeywords = ['disponibilidad', 'horarios', 'horario', 'agendar', 'agenda', 'cita', 'citas', 'appointment', 'schedule', 'availability', 'reunión', 'reunion', 'llamada', 'call'];\n// Negocios que no agendan (p. ej. venta de productos) apagan Cal.com con\n// AGENDA_ENABLED=false: esas preguntas pasan al RAG.\nconst agendaEnabled = String($env.AGENDA_ENABLED || 'true').toLowerCase() !== 'false';\n\nconst hasDateTime = /\\d{4}-\\d{2}-\\d{2}[t ]\\d{2}:\\d{2}/i.test(text);\nconst hasEmail = /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test(text);\n\nlet intent = 'rag';\nif (handoffKeywords.some((k) => text.includes(k))) {\n  intent = 'handoff';\n} else if (agendaEnabled && (bookingKeywords.some((k) => text.includes(k)) || (hasDateTime && hasEmail))) {\n  intent = 'booking';\n} else if (agendaEnabled && availabilityKeywords.some((k) => text.includes(k))) {\n  intent = 'availability';\n}\n\nreturn [{ json: { ...$json, intent } }];\n"
       }
     },
     {
@@ -300,11 +298,26 @@
       "name": "Route by Intent",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [1760, 100],
+      "position": [2480, 100],
       "parameters": {
         "mode": "rules",
         "rules": {
           "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "handoff",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "handoff"
+            },
             {
               "conditions": {
                 "options": { "caseSensitive": true, "leftValue": "" },
@@ -345,7 +358,7 @@
       "name": "Query RAG (LlamaIndex)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, -140],
+      "position": [2720, -140],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.RAG_API_URL }}/query",
@@ -368,7 +381,7 @@
       "name": "Format Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2240, -140],
+      "position": [3200, -140],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const phone = $('Extract Message').first().json.from;\nconst answer = $json.answer || $json.response || 'Lo siento, no pude procesar tu mensaje en este momento.';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body: answer },\n  },\n}];\n"
@@ -379,7 +392,7 @@
       "name": "Compute Availability Window",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 100],
+      "position": [2720, 100],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const now = new Date();\nconst end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    ...$json,\n    availabilityStart: now.toISOString(),\n    availabilityEnd: end.toISOString(),\n  },\n}];\n"
@@ -390,7 +403,7 @@
       "name": "Get Cal.com Availability",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2240, 100],
+      "position": [3200, 100],
       "parameters": {
         "method": "GET",
         "url": "={{ $env.CALCOM_API_URL }}/slots",
@@ -410,9 +423,7 @@
             { "name": "cal-api-version", "value": "={{ $env.CALCOM_API_VERSION }}" }
           ]
         },
-        "options": {
-          "response": { "response": { "neverError": true } }
-        }
+        "options": { "response": { "response": { "neverError": true } } }
       }
     },
     {
@@ -420,7 +431,7 @@
       "name": "Format Availability Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2480, 100],
+      "position": [3440, 100],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const phone = $('Extract Message').first().json.from;\nconst data = $json.data || {};\nconst allSlots = Object.values(data).flat();\nconst times = allSlots.slice(0, 5).map((slot) => slot.time || slot.start).filter(Boolean);\n\nlet body;\nif (times.length === 0) {\n  body = 'No encontré horarios disponibles en los próximos días. Probá pedir otra fecha o escribinos más tarde.';\n} else {\n  const list = times.map((t) => `• ${t}`).join('\\n');\n  body = `Estos son los próximos horarios disponibles:\\n${list}\\n\\nPara confirmar, respondé con la fecha/hora elegida y tu email en un solo mensaje, por ejemplo:\\n2026-09-10T15:00 tu-email@ejemplo.com`;\n}\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
@@ -431,7 +442,7 @@
       "name": "Extract Booking Details",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 340],
+      "position": [2720, 340],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const contactName = $('Extract Message').first().json.contactName || 'Cliente Falcon';\nconst text = $json.text || '';\n\nconst dateTimeMatch = text.match(/\\d{4}-\\d{2}-\\d{2}[t ]\\d{2}:\\d{2}(:\\d{2})?/i);\nconst emailMatch = text.match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/);\n\nconst hasDetails = Boolean(dateTimeMatch && emailMatch);\n\nreturn [{\n  json: {\n    ...$json,\n    hasDetails,\n    startTime: dateTimeMatch ? dateTimeMatch[0].replace(' ', 'T') : null,\n    attendeeEmail: emailMatch ? emailMatch[0] : null,\n    attendeeName: contactName,\n  },\n}];\n"
@@ -442,7 +453,7 @@
       "name": "Has Booking Details?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2240, 340],
+      "position": [3200, 340],
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "" },
@@ -462,7 +473,7 @@
       "name": "Book Cal.com Appointment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2480, 300],
+      "position": [3440, 300],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.CALCOM_API_URL }}/bookings",
@@ -478,9 +489,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { eventTypeId: Number($env.CALCOM_EVENT_TYPE_ID), start: $json.startTime, attendee: { name: $json.attendeeName, email: $json.attendeeEmail, timeZone: $env.CALCOM_TIMEZONE || 'America/Mexico_City' } } }}",
-        "options": {
-          "response": { "response": { "neverError": true } }
-        }
+        "options": { "response": { "response": { "neverError": true } } }
       }
     },
     {
@@ -488,7 +497,7 @@
       "name": "Format Booking Confirmation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2720, 260],
+      "position": [3680, 260],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const phone = $('Extract Message').first().json.from;\nconst startTime = $('Extract Booking Details').first().json.startTime;\nconst success = !$json.error && ($json.status === 'success' || $json.id || $json.uid);\n\nconst body = success\n  ? `¡Listo! Tu cita quedó agendada para ${startTime}. Te llegará la confirmación por email.`\n  : `No pude confirmar la cita (${$json.error?.message || 'horario no disponible'}). Probá con otro horario.`;\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
@@ -499,7 +508,7 @@
       "name": "Format Missing Details Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2480, 460],
+      "position": [3440, 460],
       "parameters": {
         "language": "javaScript",
         "jsCode": "const phone = $('Extract Message').first().json.from;\nconst body = 'Para agendar necesito la fecha/hora y tu email en un solo mensaje, por ejemplo:\\n2026-09-10T15:00 tu-email@ejemplo.com';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
@@ -510,7 +519,7 @@
       "name": "Trigger Novu Notification",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2720, 420],
+      "position": [3680, 420],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.NOVU_API_URL }}/v1/events/trigger",
@@ -525,9 +534,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { name: $env.NOVU_WORKFLOW_ID, to: { subscriberId: $('Extract Message').first().json.from, email: $('Extract Booking Details').first().json.attendeeEmail }, payload: { startTime: $('Extract Booking Details').first().json.startTime, attendeeName: $('Extract Booking Details').first().json.attendeeName, bookingStatus: $json.error ? 'failed' : 'confirmed' } } }}",
-        "options": {
-          "response": { "response": { "neverError": true } }
-        },
+        "options": { "response": { "response": { "neverError": true } } },
         "continueOnFail": true
       }
     },
@@ -536,7 +543,7 @@
       "name": "Send WhatsApp Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2960, 100],
+      "position": [3920, 100],
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION }}/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
@@ -559,7 +566,7 @@
       "name": "Log Interaction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2960, 260],
+      "position": [3920, 260],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.RAG_API_URL }}/interactions",
@@ -573,10 +580,8 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, channel: 'whatsapp', from_number: $json.to, intent: $('Detect Intent').first().json.intent, user_message: $('Extract Message').first().json.text, agent_response: $json.text.body, wa_message_id: $('Extract Message').first().json.waMessageId } }}",
-        "options": {
-          "response": { "response": { "neverError": true } }
-        },
+        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, channel: 'whatsapp', from_number: $json.to, intent: $('Create Handoff').isExecuted ? 'handoff' : $('Detect Intent').first().json.intent, user_message: $('Detect Intent').first().json.text, agent_response: $json.text.body, wa_message_id: $('Extract Message').first().json.waMessageId } }}",
+        "options": { "response": { "response": { "neverError": true } } },
         "continueOnFail": true
       }
     },
@@ -585,12 +590,190 @@
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3200, 100],
+      "position": [4160, 100],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { status: \"ok\" } }}",
         "options": { "responseCode": 200 }
       }
+    },
+    {
+      "id": "35",
+      "name": "Check Handoff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RAG_API_URL }}/handoffs/status?client_id={{ encodeURIComponent($env.FALCON_CLIENT_ID) }}&from_number={{ encodeURIComponent($('Extract Message').first().json.from) }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "36",
+      "name": "Apply Handoff Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 100],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Si el RAG no responde, se asume que no hay pausa: mejor contestar de más que dejar\n// a un cliente sin respuesta.\nconst message = $('Detect Intent').first().json;\nreturn [{ json: { ...message, paused: $json.paused === true } }];\n"
+      }
+    },
+    {
+      "id": "37",
+      "name": "Is Paused?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2240, 100],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.paused }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "38",
+      "name": "Log Paused Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2480, 340],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_URL }}/interactions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, channel: 'whatsapp', from_number: $json.from, intent: 'pausado', user_message: $json.text, agent_response: null, wa_message_id: $json.waMessageId } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "39",
+      "name": "Ack Paused",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2720, 340],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"paused\" } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "40",
+      "name": "Needs Handoff?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2960, -140],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.handoff }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "41",
+      "name": "Create Handoff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3200, -420],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_URL }}/handoffs",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { client_id: $env.FALCON_CLIENT_ID, from_number: $('Extract Message').first().json.from, reason: $('Detect Intent').first().json.intent === 'handoff' ? 'cliente_lo_pidio' : 'sin_respuesta', contact_name: $('Extract Message').first().json.contactName, last_message: $('Detect Intent').first().json.text } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "42",
+      "name": "Format Handoff Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3440, -420],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst body = $env.HANDOFF_REPLY || 'Le pasé tu mensaje a una persona del equipo y te va a contactar pronto por WhatsApp. ¡Gracias por la paciencia!';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "43",
+      "name": "Format Owner Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3440, -620],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Aviso al dueño del negocio. Sin HANDOFF_NOTIFY_NUMBER no se avisa a nadie.\nconst to = String($env.HANDOFF_NOTIFY_NUMBER || '').replace(/\\D/g, '');\nif (!to) return [];\n\nconst message = $('Extract Message').first().json;\nconst askedForPerson = $('Detect Intent').first().json.intent === 'handoff';\nconst reason = askedForPerson\n  ? 'pidió hablar con una persona, comprar o cotizar'\n  : 'el bot no encontró la respuesta';\nconst summary = $json.summary || `Cliente: ${message.contactName || 'sin nombre'} (+${message.from})`;\nconst pauseNote = $json.paused_until ? ' El bot quedó en pausa con este cliente.' : '';\nconst text = `Cliente para atender: ${reason}.\\n${summary}\\nEscríbele: https://wa.me/${message.from}${pauseNote}`;\n\n// Fuera de la ventana de 24 h, WhatsApp solo deja enviar plantillas\n// aprobadas: con HANDOFF_TEMPLATE_NAME se usa la plantilla (un parámetro de\n// cuerpo, en una sola línea), si no, texto libre.\nif ($env.HANDOFF_TEMPLATE_NAME) {\n  return [{\n    json: {\n      messaging_product: 'whatsapp',\n      to,\n      type: 'template',\n      template: {\n        name: $env.HANDOFF_TEMPLATE_NAME,\n        language: { code: $env.HANDOFF_TEMPLATE_LANG || 'es' },\n        components: [{\n          type: 'body',\n          parameters: [{ type: 'text', text: text.replace(/\\s*\\n\\s*/g, ' | ').slice(0, 1000) }],\n        }],\n      },\n    },\n  }];\n}\n\nreturn [{ json: { messaging_product: 'whatsapp', to, type: 'text', text: { body: text } } }];\n"
+      }
+    },
+    {
+      "id": "44",
+      "name": "Notify Owner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3680, -620],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION }}/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -618,9 +801,7 @@
         [{ "node": "Reject Invalid Signature", "type": "main", "index": 0 }]
       ]
     },
-    "Extract Message": {
-      "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]]
-    },
+    "Extract Message": { "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]] },
     "Has Message?": {
       "main": [
         [{ "node": "Is Audio?", "type": "main", "index": 0 }],
@@ -633,33 +814,22 @@
         [{ "node": "Use Text As-Is", "type": "main", "index": 0 }]
       ]
     },
-    "Get Media URL": {
-      "main": [[{ "node": "Download Audio", "type": "main", "index": 0 }]]
-    },
-    "Download Audio": {
-      "main": [[{ "node": "Whisper Transcribe", "type": "main", "index": 0 }]]
-    },
-    "Whisper Transcribe": {
-      "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]]
-    },
-    "Use Text As-Is": {
-      "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]]
-    },
-    "Merge Text": {
-      "main": [[{ "node": "Detect Intent", "type": "main", "index": 0 }]]
-    },
-    "Detect Intent": {
-      "main": [[{ "node": "Route by Intent", "type": "main", "index": 0 }]]
-    },
+    "Get Media URL": { "main": [[{ "node": "Download Audio", "type": "main", "index": 0 }]] },
+    "Download Audio": { "main": [[{ "node": "Whisper Transcribe", "type": "main", "index": 0 }]] },
+    "Whisper Transcribe": { "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]] },
+    "Use Text As-Is": { "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]] },
+    "Merge Text": { "main": [[{ "node": "Detect Intent", "type": "main", "index": 0 }]] },
+    "Detect Intent": { "main": [[{ "node": "Check Handoff", "type": "main", "index": 0 }]] },
     "Route by Intent": {
       "main": [
+        [{ "node": "Create Handoff", "type": "main", "index": 0 }],
         [{ "node": "Extract Booking Details", "type": "main", "index": 0 }],
         [{ "node": "Compute Availability Window", "type": "main", "index": 0 }],
         [{ "node": "Query RAG (LlamaIndex)", "type": "main", "index": 0 }]
       ]
     },
     "Query RAG (LlamaIndex)": {
-      "main": [[{ "node": "Format Reply", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Needs Handoff?", "type": "main", "index": 0 }]]
     },
     "Format Reply": {
       "main": [
@@ -716,8 +886,40 @@
         ]
       ]
     },
-    "Send WhatsApp Reply": {
-      "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]]
+    "Send WhatsApp Reply": { "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]] },
+    "Check Handoff": { "main": [[{ "node": "Apply Handoff Status", "type": "main", "index": 0 }]] },
+    "Apply Handoff Status": { "main": [[{ "node": "Is Paused?", "type": "main", "index": 0 }]] },
+    "Is Paused?": {
+      "main": [
+        [{ "node": "Log Paused Message", "type": "main", "index": 0 }],
+        [{ "node": "Route by Intent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Paused Message": { "main": [[{ "node": "Ack Paused", "type": "main", "index": 0 }]] },
+    "Needs Handoff?": {
+      "main": [
+        [{ "node": "Create Handoff", "type": "main", "index": 0 }],
+        [{ "node": "Format Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Handoff": {
+      "main": [
+        [
+          { "node": "Format Handoff Reply", "type": "main", "index": 0 },
+          { "node": "Format Owner Notification", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Owner Notification": {
+      "main": [[{ "node": "Notify Owner", "type": "main", "index": 0 }]]
+    },
+    "Format Handoff Reply": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Log Interaction", "type": "main", "index": 0 }
+        ]
+      ]
     }
   },
   "settings": { "executionOrder": "v1" }

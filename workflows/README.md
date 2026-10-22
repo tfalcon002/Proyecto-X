@@ -34,13 +34,18 @@ Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──�
                                             ▼
                                      Detect Intent
                                             ▼
-                                    Route by Intent
+                         Check Handoff ──► Is Paused? ──(sí)──► Log Paused Message ──► Ack Paused
+                                            │(no)            (el bot no responde: lo atiende una persona)
+                                            ▼
+                                    Route by Intent ──(handoff)──► Derivación (ver más abajo)
                     ┌───────────────────┼───────────────────┐
               (booking)           (availability)          (rag, default)
                     ▼                    ▼                    ▼
         Extract Booking Details   Compute Availability   Query RAG (LlamaIndex)
                     ▼                    Window                 ▼
-          Has Booking Details?           ▼                Format Reply
+          Has Booking Details?           ▼              Needs Handoff? ──(sí)──► Derivación
+                    │                    │                      ▼ (no)
+                    │                    │                Format Reply
            │              │      Get Cal.com Availability        │
       (sí) ▼         (no) ▼              ▼                       │
   Book Cal.com    Format Missing   Format Availability            │
@@ -124,6 +129,10 @@ falta completarlas en tu `.env` (ver `.env.example`).
 | `NOVU_API_URL` | Base de la API de Novu | Normalmente `https://api.novu.co` |
 | `NOVU_API_KEY` | API key para disparar notificaciones (`Authorization: ApiKey <key>`) | Novu → Settings → API Keys |
 | `NOVU_WORKFLOW_ID` | Identificador del Workflow de Novu que define los canales de la notificación de confirmación | Novu Dashboard → Workflows |
+| `AGENDA_ENABLED` | `false` apaga los caminos de Cal.com (negocios sin agenda) | Por defecto `true` |
+| `HANDOFF_NOTIFY_NUMBER` | WhatsApp del dueño que recibe los avisos de derivación, con código de país y sin `+` | El número personal del dueño del negocio |
+| `HANDOFF_REPLY` | Mensaje al cliente cuando se lo deriva | Opcional; hay un texto por defecto |
+| `HANDOFF_TEMPLATE_NAME` / `HANDOFF_TEMPLATE_LANG` | Plantilla aprobada para avisar al dueño fuera de la ventana de 24 h | Meta → WhatsApp → Plantillas de mensajes |
 
 ### Cal.com: disponibilidad y agendado desde el chat
 
@@ -154,14 +163,63 @@ de WhatsApp como `subscriberId`, y el resultado de la reserva en el
 `payload`. El Workflow de Novu (`NOVU_WORKFLOW_ID`) es quien decide los
 canales reales (email, SMS, push, in-app) — no se configuran acá.
 
+### Memoria de conversación
+
+`Query RAG` manda el número del cliente como `session_id`. El RAG lee los
+últimos intercambios de ese número (`HISTORY_LIMIT`, por defecto 6, de las
+últimas `HISTORY_HOURS`, por defecto 24) desde `agente_interacciones` y
+responde como una conversación: "¿y en rojo?" se entiende en el contexto de
+lo anterior. No hay que configurar nada en n8n; la memoria es lo que ya
+guarda `Log Interaction`.
+
+### Derivación a una persona (handoff)
+
+Una conversación se deriva cuando:
+
+- `Detect Intent` marca `handoff`: el cliente pide hablar con una persona,
+  comprar, hacer un pedido o cotizar (palabras clave), o
+- el RAG responde `handoff: true`: no encontró la respuesta en los
+  documentos, o el modelo detectó que el cliente quiere comprar o hablar con
+  alguien.
+
+Entonces:
+
+1. `Create Handoff` llama a `POST /handoffs` del RAG, que pausa el bot con
+   ese número por `HANDOFF_PAUSE_HOURS` (por defecto 12) y arma un resumen
+   con los últimos mensajes.
+2. `Format Handoff Reply` le avisa al cliente que lo va a contactar una
+   persona (`HANDOFF_REPLY`, o un texto por defecto).
+3. `Format Owner Notification` + `Notify Owner` le mandan al dueño
+   (`HANDOFF_NOTIFY_NUMBER`) el motivo, el resumen y un link `wa.me` para
+   escribirle al cliente. Si la variable está vacía, no se avisa a nadie.
+4. Mientras dure la pausa, `Is Paused?` corta el flujo: los mensajes del
+   cliente se registran (`intent: pausado`) pero el bot no contesta. Para
+   reactivarlo antes, `DELETE /handoffs` en el RAG.
+
+**Ventana de 24 h de WhatsApp:** un negocio solo puede mandar texto libre a
+un número que le escribió en las últimas 24 h. Si el dueño no le escribió
+al número del bot ese día, el aviso en texto libre falla en silencio
+(`Notify Owner` no corta el flujo). Para que llegue siempre, crear en Meta
+una plantilla de categoría "Utilidad" con un solo parámetro de cuerpo
+(`{{1}}`) y poner su nombre en `HANDOFF_TEMPLATE_NAME`.
+
+### Negocios sin agenda
+
+Con `AGENDA_ENABLED=false`, `Detect Intent` nunca marca `booking` ni
+`availability`: preguntas como "¿cuál es su horario?" van al RAG en vez de a
+Cal.com. Pensado para negocios que venden productos (p. ej. NeeckPrint) y no
+tienen Cal.com configurado.
+
 ### Historial de interacciones (`Log Interaction`)
 
-Las cuatro ramas de respuesta (`Format Reply`, `Format Availability Reply`,
-`Format Booking Confirmation`, `Format Missing Details Reply`) disparan en
+Las cinco ramas de respuesta (`Format Reply`, `Format Availability Reply`,
+`Format Booking Confirmation`, `Format Missing Details Reply`,
+`Format Handoff Reply`) disparan en
 paralelo a `Send WhatsApp Reply` el nodo `Log Interaction`
 (fire-and-forget: su falla no bloquea la respuesta al usuario), que llama a
 `POST /interactions` del RAG con el `client_id` (`FALCON_CLIENT_ID`), el
-teléfono, la intención detectada, el mensaje original del usuario y la
+teléfono, la intención detectada (`handoff` si se derivó), el mensaje del
+usuario (ya transcrito si era audio) y la
 respuesta final que se le mandó. Queda guardado en la tabla
 `agente_interacciones` (ver `postgres-init/init-rag-db.sh` y
 `rag-service/README.md`).
@@ -185,9 +243,11 @@ En el dashboard de la app de Meta (WhatsApp → Configuration):
   disponibilidad real. Mejora natural: reemplazar por una clasificación de
   intención vía LLM (mismo proveedor que ya usa `rag-service/`).
 - **El agendado exige que el usuario escriba fecha/hora + email en un solo
-  mensaje de texto**, con formato `AAAA-MM-DDTHH:MM`. No hay conversación
-  guiada de varios turnos (pedir primero la fecha, después el email por
-  separado) — WhatsApp no tiene estado de conversación en este workflow.
+  mensaje de texto**, con formato `AAAA-MM-DDTHH:MM`. La memoria de
+  conversación solo la usa el camino `rag`; el agendado sigue sin
+  conversación guiada de varios turnos.
+- La pausa de una derivación vence sola o con `DELETE /handoffs`; todavía no
+  hay un comando por WhatsApp para que el dueño reactive el bot.
 - `Book Cal.com Appointment` no verifica que el horario elegido siga
   disponible al momento de confirmar (puede haberse ocupado entre la
   consulta de disponibilidad y la confirmación); Cal.com devuelve error en

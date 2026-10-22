@@ -49,8 +49,11 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
 | GET | `/health` | — | Chequeo de vida |
 | POST | `/clients` | `{"client_id": "...", "name": "..."}` | Registra (o actualiza el nombre de) un cliente de Falcon |
 | POST | `/ingest` | `{"client_id": "...", "documents": [{"id": "...", "text": "...", "metadata": {}}]}` | Indexa uno o más documentos para ese cliente |
-| POST | `/query` | `{"client_id": "...", "query": "...", "session_id": "...", "top_k": 4}` | Devuelve `{"answer": "...", "sources": [...]}` filtrado a los documentos de ese cliente |
+| POST | `/query` | `{"client_id": "...", "query": "...", "session_id": "...", "top_k": 4}` | Devuelve `{"answer": "...", "sources": [...], "handoff": false}` filtrado a los documentos de ese cliente. `session_id` es el número del cliente: con él se leen sus últimos intercambios (memoria). `handoff: true` (con `answer` vacío) significa que hay que derivar a una persona |
 | POST | `/interactions` | `{"client_id": "...", "channel": "whatsapp", "from_number": "...", "intent": "...", "user_message": "...", "agent_response": "...", "wa_message_id": "...", "session_id": "..."}` | Registra una interacción en el historial (`agente_interacciones`); devuelve `{"id", "client_id", "created_at"}` |
+| POST | `/handoffs` | `{"client_id": "...", "from_number": "...", "reason": "...", "contact_name": "...", "last_message": "..."}` | Pausa el bot con ese número por `HANDOFF_PAUSE_HOURS` y devuelve `{"paused", "paused_until", "summary"}` |
+| GET | `/handoffs/status?client_id=...&from_number=...` | — | `{"paused": true/false, "paused_until": ...}` |
+| DELETE | `/handoffs?client_id=...&from_number=...` | — | Reactiva el bot con ese número |
 
 Los cuatro endpoints (salvo `/health`) requieren `Authorization: Bearer
 $RAG_API_KEY` si esa variable está configurada. `/ingest`, `/query` e
@@ -92,6 +95,10 @@ curl -X POST http://localhost:${RAG_PORT}/interactions \
   *datos*, no de *autenticación* — el paso natural siguiente es una clave
   por cliente (o un JWT que la incluya), en vez de confiar en el valor que
   manda quien llama.
+- Las tablas `clients`, `agente_interacciones` y `conversaciones_derivadas`
+  las crea el propio servicio al arrancar (`_ensure_schema`, idempotente),
+  porque en Coolify el bind mount de `postgres-init/` no se monta. La base
+  `RAG_DB` y la extensión `vector` sí tienen que existir antes.
 - `postgres-init/init-rag-db.sh` solo corre en el primer arranque de un
   volumen nuevo (semántica de `docker-entrypoint-initdb.d`). En un
   deployment que ya tenga datos, una tabla nueva ahí no se crea sola —
