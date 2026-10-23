@@ -16,8 +16,9 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
                      │                              │   cada fila con client_id en su metadata)
                      │                              └── tabla "agente_interacciones" (historial
                      │                                  de mensajes + respuestas, por client_id)
-                     ├── Embeddings: OpenAI o Ollama (según EMBEDDING_PROVIDER)
-                     └── LLM de respuesta: OpenAI o Ollama (según LLM_PROVIDER)
+                     ├── Embeddings: OpenAI, Gemini u Ollama (según EMBEDDING_PROVIDER)
+                     ├── LLM de respuesta: OpenAI, Gemini u Ollama (según LLM_PROVIDER)
+                     └── Transcripción de audios: Gemini (POST /v1/audio/transcriptions)
 ```
 
 - **Un solo contenedor de Postgres** sirve tanto a n8n (base `POSTGRES_DB`)
@@ -37,6 +38,16 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
   (rápido de arrancar), con la opción de usar Ollama local para no
   depender de una API externa. Se elige con `EMBEDDING_PROVIDER` /
   `LLM_PROVIDER` en `.env` — no requiere tocar código.
+- **Gemini** (`gemini` en ambas variables + `GEMINI_API_KEY` de Google AI
+  Studio): sirve para partir sin tarjeta con el plan gratis. Ojo: en el plan
+  gratis Google puede usar los mensajes para entrenar sus modelos y los
+  límites de uso son bajos; para clientes que pagan, activar facturación en
+  AI Studio. Con `EMBEDDING_DIM=1536` la tabla queda del mismo tamaño que con
+  OpenAI, pero los vectores de un proveedor no sirven con el otro: al cambiar
+  `EMBEDDING_PROVIDER` hay que volver a ingestar los documentos.
+- **Transcripción**: `POST /v1/audio/transcriptions` imita la API de Whisper
+  (campo `file`, respuesta `{"text": "..."}`) y transcribe con Gemini. Si
+  `WHISPER_API_URL` queda vacío en n8n, el workflow usa este endpoint.
 - **Autenticación simple**: Bearer token (`RAG_API_KEY`) igual al que ya
   espera el workflow de n8n. Si no se configura, el servicio queda abierto
   (aceptable solo en desarrollo local). Es una única clave compartida por
@@ -49,8 +60,12 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
 | GET | `/health` | — | Chequeo de vida |
 | POST | `/clients` | `{"client_id": "...", "name": "..."}` | Registra (o actualiza el nombre de) un cliente de Falcon |
 | POST | `/ingest` | `{"client_id": "...", "documents": [{"id": "...", "text": "...", "metadata": {}}]}` | Indexa uno o más documentos para ese cliente |
-| POST | `/query` | `{"client_id": "...", "query": "...", "session_id": "...", "top_k": 4}` | Devuelve `{"answer": "...", "sources": [...]}` filtrado a los documentos de ese cliente |
+| POST | `/query` | `{"client_id": "...", "query": "...", "session_id": "...", "top_k": 4}` | Devuelve `{"answer": "...", "sources": [...], "handoff": false}` filtrado a los documentos de ese cliente. `session_id` es el número del cliente: con él se leen sus últimos intercambios (memoria). `handoff: true` (con `answer` vacío) significa que hay que derivar a una persona |
 | POST | `/interactions` | `{"client_id": "...", "channel": "whatsapp", "from_number": "...", "intent": "...", "user_message": "...", "agent_response": "...", "wa_message_id": "...", "session_id": "..."}` | Registra una interacción en el historial (`agente_interacciones`); devuelve `{"id", "client_id", "created_at"}` |
+| POST | `/handoffs` | `{"client_id": "...", "from_number": "...", "reason": "...", "contact_name": "...", "last_message": "..."}` | Pausa el bot con ese número por `HANDOFF_PAUSE_HOURS` y devuelve `{"paused", "paused_until", "summary"}` |
+| GET | `/handoffs/status?client_id=...&from_number=...` | — | `{"paused": true/false, "paused_until": ...}` |
+| DELETE | `/handoffs?client_id=...&from_number=...` | — | Reactiva el bot con ese número |
+| POST | `/v1/audio/transcriptions` | multipart: `file` (audio), `model` (se ignora) | `{"text": "..."}`; transcribe con Gemini (requiere `GEMINI_API_KEY`) |
 
 Los cuatro endpoints (salvo `/health`) requieren `Authorization: Bearer
 $RAG_API_KEY` si esa variable está configurada. `/ingest`, `/query` e
@@ -92,6 +107,10 @@ curl -X POST http://localhost:${RAG_PORT}/interactions \
   *datos*, no de *autenticación* — el paso natural siguiente es una clave
   por cliente (o un JWT que la incluya), en vez de confiar en el valor que
   manda quien llama.
+- Las tablas `clients`, `agente_interacciones` y `conversaciones_derivadas`
+  las crea el propio servicio al arrancar (`_ensure_schema`, idempotente),
+  porque en Coolify el bind mount de `postgres-init/` no se monta. La base
+  `RAG_DB` y la extensión `vector` sí tienen que existir antes.
 - `postgres-init/init-rag-db.sh` solo corre en el primer arranque de un
   volumen nuevo (semántica de `docker-entrypoint-initdb.d`). En un
   deployment que ya tenga datos, una tabla nueva ahí no se crea sola —
