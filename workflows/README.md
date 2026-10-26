@@ -93,9 +93,10 @@ de acceso a la Graph API.
    `workflows/whatsapp-rag-inbound.json`.
 2. Revisar cada nodo `HTTP Request` una vez importado — los nombres de
    parámetros de autenticación/body pueden variar levemente según la
-   versión de n8n; el nodo `Merge Text` en particular conviene confirmarlo
-   manualmente (modo "Choose Branch": debe tomar los datos de la rama que
-   sí se ejecutó, audio o texto). Lo mismo con `Compute Meta Signature`
+   versión de n8n; `Merge Text` es un nodo "No Operation"
+   donde se juntan las ramas de audio y texto: no usar un nodo Merge, que
+   espera ambas entradas y corta el flujo cuando solo llega una. Confirmar
+   también `Compute Meta Signature`
    (nodo `Crypto`): confirmar que quedaron seleccionados "HMAC" / "SHA256" /
    modo binario sobre la propiedad `data`, ya que los nombres exactos de
    estos campos varían entre versiones de n8n.

@@ -277,10 +277,10 @@
     {
       "id": "14",
       "name": "Merge Text",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [1280, 100],
-      "parameters": { "mode": "chooseBranch", "output": "input1" }
+      "parameters": {}
     },
     {
       "id": "19",
@@ -817,7 +817,7 @@
     "Get Media URL": { "main": [[{ "node": "Download Audio", "type": "main", "index": 0 }]] },
     "Download Audio": { "main": [[{ "node": "Whisper Transcribe", "type": "main", "index": 0 }]] },
     "Whisper Transcribe": { "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]] },
-    "Use Text As-Is": { "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]] },
+    "Use Text As-Is": { "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]] },
     "Merge Text": { "main": [[{ "node": "Detect Intent", "type": "main", "index": 0 }]] },
     "Detect Intent": { "main": [[{ "node": "Check Handoff", "type": "main", "index": 0 }]] },
     "Route by Intent": {
