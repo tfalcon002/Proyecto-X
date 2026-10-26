@@ -85,7 +85,7 @@
         "binaryData": true,
         "binaryPropertyName": "data",
         "encoding": "hex",
-        "propertyName": "computedSignature"
+        "dataPropertyName": "computedSignature"
       }
     },
     {
