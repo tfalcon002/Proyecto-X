@@ -17,7 +17,9 @@ Meta Verify (GET)  ──► Check Verify Token ──► Respond Challenge / Re
 Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──► 403 Forbidden
                                     │(válida)
                                     ▼
-                            Extract Message ──► Has Message? ──(no)──► Ack No-op
+                               Ack Event (200 a Meta de inmediato)
+                                    ▼
+                            Extract Message ──► Has Message? ──(no)──► fin
                                                │(sí)
                                                ▼
                                           Is Audio?
@@ -34,7 +36,7 @@ Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──�
                                             ▼
                                      Detect Intent
                                             ▼
-                         Check Handoff ──► Is Paused? ──(sí)──► Log Paused Message ──► Ack Paused
+                         Check Handoff ──► Is Paused? ──(sí)──► Log Paused Message
                                             │(no)            (el bot no responde: lo atiende una persona)
                                             ▼
                                     Route by Intent ──(handoff)──► Derivación (ver más abajo)
@@ -54,8 +56,7 @@ Meta Events (POST) ──► Compute + Verify Signature ──(inválida)──�
      ▼      ▼            └───────────────┴───────────┬───────────┘
 Format    Trigger Novu                                ▼
 Booking   Notification               ┌─── Send WhatsApp Reply
-Confirm.  (fire-and-forget)          │                ▼
-     │                               │             Ack Event
+Confirm.  (fire-and-forget)          │
      │                               └─── Log Interaction (fire-and-forget)
      └──────────────────────────────────────────────────┘
 ```
@@ -235,9 +236,10 @@ En el dashboard de la app de Meta (WhatsApp → Configuration):
 
 ### Pendiente / próximos pasos
 
-- Responde de forma síncrona (Meta espera la respuesta del webhook antes
-  de los ~20s de timeout); si la consulta RAG o Cal.com es lenta, conviene
-  separar en "ack inmediato" + procesamiento asíncrono en un flujo aparte.
+- `Ack Event` le contesta 200 a Meta apenas valida la firma, antes de
+  llamar al RAG. Si el 200 llega tarde, Meta da el mensaje por no entregado
+  y lo reintenta durante horas, y cada reintento genera otra respuesta al
+  cliente. No agregar otro nodo "Respond to Webhook" después de `Ack Event`.
 - **`Detect Intent` es por palabras clave**, no por un LLM — es un MVP.
   Frases ambiguas ("¿el jueves tenés lugar?") pueden no matchear ningún
   keyword y caer al camino `rag`, donde el RAG no sabrá responder sobre

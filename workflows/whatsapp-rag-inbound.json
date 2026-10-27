@@ -163,18 +163,6 @@
       }
     },
     {
-      "id": "8",
-      "name": "Ack No-op",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [320, 340],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: \"ignored\" } }}",
-        "options": { "responseCode": 200 }
-      }
-    },
-    {
       "id": "9",
       "name": "Is Audio?",
       "type": "n8n-nodes-base.if",
@@ -592,10 +580,10 @@
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [4160, 100],
+      "position": [320, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { status: \"ok\" } }}",
+        "responseBody": "={{ { status: \"received\" } }}",
         "options": { "responseCode": 200 }
       }
     },
@@ -675,18 +663,6 @@
         "options": { "response": { "response": { "neverError": true } } }
       },
       "continueOnFail": true
-    },
-    {
-      "id": "39",
-      "name": "Ack Paused",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [2720, 340],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: \"paused\" } }}",
-        "options": { "responseCode": 200 }
-      }
     },
     {
       "id": "40",
@@ -800,15 +776,16 @@
     },
     "Signature Valid?": {
       "main": [
-        [{ "node": "Extract Message", "type": "main", "index": 0 }],
+        [{ "node": "Ack Event", "type": "main", "index": 0 }],
         [{ "node": "Reject Invalid Signature", "type": "main", "index": 0 }]
       ]
     },
+    "Ack Event": { "main": [[{ "node": "Extract Message", "type": "main", "index": 0 }]] },
     "Extract Message": { "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]] },
     "Has Message?": {
       "main": [
         [{ "node": "Is Audio?", "type": "main", "index": 0 }],
-        [{ "node": "Ack No-op", "type": "main", "index": 0 }]
+        []
       ]
     },
     "Is Audio?": {
@@ -889,7 +866,6 @@
         ]
       ]
     },
-    "Send WhatsApp Reply": { "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]] },
     "Check Handoff": { "main": [[{ "node": "Apply Handoff Status", "type": "main", "index": 0 }]] },
     "Apply Handoff Status": { "main": [[{ "node": "Is Paused?", "type": "main", "index": 0 }]] },
     "Is Paused?": {
@@ -898,7 +874,6 @@
         [{ "node": "Route by Intent", "type": "main", "index": 0 }]
       ]
     },
-    "Log Paused Message": { "main": [[{ "node": "Ack Paused", "type": "main", "index": 0 }]] },
     "Needs Handoff?": {
       "main": [
         [{ "node": "Create Handoff", "type": "main", "index": 0 }],
