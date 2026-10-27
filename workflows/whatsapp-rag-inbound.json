@@ -567,6 +567,7 @@
       "name": "Log Interaction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [3920, 260],
       "parameters": {
         "method": "POST",
@@ -655,6 +656,7 @@
       "name": "Log Paused Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [2480, 340],
       "parameters": {
         "method": "POST",
