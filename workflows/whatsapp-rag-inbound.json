@@ -139,7 +139,7 @@
       "position": [-160, 200],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  // Delivery/read receipts or other callbacks with no user message\n  return [{ json: { hasMessage: false } }];\n}\n\nconst contact = value.contacts?.[0];\nconst from = message.from;\nconst type = message.type;\n\nlet text = null;\nlet mediaId = null;\n\nif (type === 'text') {\n  text = message.text.body;\n} else if (type === 'audio') {\n  mediaId = message.audio.id;\n} else if (type === 'button') {\n  text = message.button?.text;\n} else if (type === 'interactive') {\n  text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;\n}\n\nreturn [{\n  json: {\n    hasMessage: true,\n    from,\n    type,\n    text,\n    mediaId,\n    waMessageId: message.id,\n    contactName: contact?.profile?.name || null,\n  },\n}];\n"
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  // Delivery/read receipts or other callbacks with no user message\n  return [{ json: { hasMessage: false } }];\n}\n\n// Meta reintenta el mismo webhook si no recibi\u00f3 200 a tiempo; sin esto el\n// cliente recibir\u00eda la misma respuesta varias veces.\nconst seen = $getWorkflowStaticData('global');\nseen.waMessageIds = seen.waMessageIds || [];\nif (seen.waMessageIds.includes(message.id)) {\n  return [{ json: { hasMessage: false, duplicate: true } }];\n}\nseen.waMessageIds = [...seen.waMessageIds.slice(-199), message.id];\n\nconst contact = value.contacts?.[0];\nconst from = message.from;\nconst type = message.type;\n\nlet text = null;\nlet mediaId = null;\n\nif (type === 'text') {\n  text = message.text.body;\n} else if (type === 'audio') {\n  mediaId = message.audio.id;\n} else if (type === 'button') {\n  text = message.button?.text;\n} else if (type === 'interactive') {\n  text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;\n}\n\nreturn [{\n  json: {\n    hasMessage: true,\n    from,\n    type,\n    text,\n    mediaId,\n    waMessageId: message.id,\n    contactName: contact?.profile?.name || null,\n  },\n}];\n"
       }
     },
     {
@@ -543,6 +543,7 @@
       "name": "Send WhatsApp Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [3920, 100],
       "parameters": {
         "method": "POST",
