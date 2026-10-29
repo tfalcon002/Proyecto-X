@@ -85,7 +85,7 @@
         "binaryData": true,
         "binaryPropertyName": "data",
         "encoding": "hex",
-        "propertyName": "computedSignature"
+        "dataPropertyName": "computedSignature"
       }
     },
     {
@@ -139,7 +139,7 @@
       "position": [-160, 200],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  // Delivery/read receipts or other callbacks with no user message\n  return [{ json: { hasMessage: false } }];\n}\n\nconst contact = value.contacts?.[0];\nconst from = message.from;\nconst type = message.type;\n\nlet text = null;\nlet mediaId = null;\n\nif (type === 'text') {\n  text = message.text.body;\n} else if (type === 'audio') {\n  mediaId = message.audio.id;\n} else if (type === 'button') {\n  text = message.button?.text;\n} else if (type === 'interactive') {\n  text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;\n}\n\nreturn [{\n  json: {\n    hasMessage: true,\n    from,\n    type,\n    text,\n    mediaId,\n    waMessageId: message.id,\n    contactName: contact?.profile?.name || null,\n  },\n}];\n"
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  // Delivery/read receipts or other callbacks with no user message\n  return [{ json: { hasMessage: false } }];\n}\n\n// Meta reintenta el mismo webhook si no recibi\u00f3 200 a tiempo; sin esto el\n// cliente recibir\u00eda la misma respuesta varias veces.\nconst seen = $getWorkflowStaticData('global');\nseen.waMessageIds = seen.waMessageIds || [];\nif (seen.waMessageIds.includes(message.id)) {\n  return [{ json: { hasMessage: false, duplicate: true } }];\n}\nseen.waMessageIds = [...seen.waMessageIds.slice(-199), message.id];\n\nconst contact = value.contacts?.[0];\nconst from = message.from;\nconst type = message.type;\n\nlet text = null;\nlet mediaId = null;\n\nif (type === 'text') {\n  text = message.text.body;\n} else if (type === 'audio') {\n  mediaId = message.audio.id;\n} else if (type === 'button') {\n  text = message.button?.text;\n} else if (type === 'interactive') {\n  text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title;\n}\n\nreturn [{\n  json: {\n    hasMessage: true,\n    from,\n    type,\n    text,\n    mediaId,\n    waMessageId: message.id,\n    contactName: contact?.profile?.name || null,\n  },\n}];\n"
       }
     },
     {
@@ -160,18 +160,6 @@
           ],
           "combinator": "and"
         }
-      }
-    },
-    {
-      "id": "8",
-      "name": "Ack No-op",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [320, 340],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: \"ignored\" } }}",
-        "options": { "responseCode": 200 }
       }
     },
     {
@@ -277,10 +265,10 @@
     {
       "id": "14",
       "name": "Merge Text",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [1280, 100],
-      "parameters": { "mode": "chooseBranch", "output": "input1" }
+      "parameters": {}
     },
     {
       "id": "19",
@@ -543,6 +531,7 @@
       "name": "Send WhatsApp Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [3920, 100],
       "parameters": {
         "method": "POST",
@@ -566,6 +555,7 @@
       "name": "Log Interaction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [3920, 260],
       "parameters": {
         "method": "POST",
@@ -590,10 +580,10 @@
       "name": "Ack Event",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [4160, 100],
+      "position": [320, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { status: \"ok\" } }}",
+        "responseBody": "={{ { status: \"received\" } }}",
         "options": { "responseCode": 200 }
       }
     },
@@ -654,6 +644,7 @@
       "name": "Log Paused Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
       "position": [2480, 340],
       "parameters": {
         "method": "POST",
@@ -672,18 +663,6 @@
         "options": { "response": { "response": { "neverError": true } } }
       },
       "continueOnFail": true
-    },
-    {
-      "id": "39",
-      "name": "Ack Paused",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [2720, 340],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { status: \"paused\" } }}",
-        "options": { "responseCode": 200 }
-      }
     },
     {
       "id": "40",
@@ -797,15 +776,16 @@
     },
     "Signature Valid?": {
       "main": [
-        [{ "node": "Extract Message", "type": "main", "index": 0 }],
+        [{ "node": "Ack Event", "type": "main", "index": 0 }],
         [{ "node": "Reject Invalid Signature", "type": "main", "index": 0 }]
       ]
     },
+    "Ack Event": { "main": [[{ "node": "Extract Message", "type": "main", "index": 0 }]] },
     "Extract Message": { "main": [[{ "node": "Has Message?", "type": "main", "index": 0 }]] },
     "Has Message?": {
       "main": [
         [{ "node": "Is Audio?", "type": "main", "index": 0 }],
-        [{ "node": "Ack No-op", "type": "main", "index": 0 }]
+        []
       ]
     },
     "Is Audio?": {
@@ -817,7 +797,7 @@
     "Get Media URL": { "main": [[{ "node": "Download Audio", "type": "main", "index": 0 }]] },
     "Download Audio": { "main": [[{ "node": "Whisper Transcribe", "type": "main", "index": 0 }]] },
     "Whisper Transcribe": { "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]] },
-    "Use Text As-Is": { "main": [[{ "node": "Merge Text", "type": "main", "index": 1 }]] },
+    "Use Text As-Is": { "main": [[{ "node": "Merge Text", "type": "main", "index": 0 }]] },
     "Merge Text": { "main": [[{ "node": "Detect Intent", "type": "main", "index": 0 }]] },
     "Detect Intent": { "main": [[{ "node": "Check Handoff", "type": "main", "index": 0 }]] },
     "Route by Intent": {
@@ -886,7 +866,6 @@
         ]
       ]
     },
-    "Send WhatsApp Reply": { "main": [[{ "node": "Ack Event", "type": "main", "index": 0 }]] },
     "Check Handoff": { "main": [[{ "node": "Apply Handoff Status", "type": "main", "index": 0 }]] },
     "Apply Handoff Status": { "main": [[{ "node": "Is Paused?", "type": "main", "index": 0 }]] },
     "Is Paused?": {
@@ -895,7 +874,6 @@
         [{ "node": "Route by Intent", "type": "main", "index": 0 }]
       ]
     },
-    "Log Paused Message": { "main": [[{ "node": "Ack Paused", "type": "main", "index": 0 }]] },
     "Needs Handoff?": {
       "main": [
         [{ "node": "Create Handoff", "type": "main", "index": 0 }],
