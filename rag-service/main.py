@@ -64,7 +64,12 @@ HANDOFF_MARKER = "[DERIVAR]"
 # bot cansa más de lo que ayuda.
 VOICE_MAX_CHARS = int(os.environ.get("VOICE_MAX_CHARS", "600"))
 
-SYSTEM_PROMPT = """Eres el asistente de WhatsApp de {business}. Respondes en español, \
+# Identidad del asistente: nombre propio y cargo (ej. "Sofía", "vendedora").
+# Sin nombre, se presenta como "el asistente de WhatsApp de <negocio>".
+ASSISTANT_NAME = os.environ.get("ASSISTANT_NAME", "").strip()
+ASSISTANT_ROLE = os.environ.get("ASSISTANT_ROLE", "").strip() or "asistente"
+
+SYSTEM_PROMPT = """{identity} Respondes en español, \
 en tono cercano y breve (mensajes de WhatsApp: 1 a 4 frases, sin markdown).
 
 Reglas:
@@ -73,7 +78,16 @@ precios, plazos, productos ni políticas.
 - Si la respuesta no está en el contexto, o el cliente quiere comprar, hacer \
 un pedido, pedir una cotización o hablar con una persona, responde \
 únicamente {marker} y nada más.
-- Si el cliente solo saluda, salúdalo y pregúntale en qué lo puedes ayudar."""
+- Si el cliente solo saluda, salúdalo y pregúntale en qué lo puedes ayudar.
+- Si te preguntan si eres una persona o un bot, di con naturalidad que eres \
+el asistente virtual de {business} y que, si lo necesita, lo puedes pasar \
+con alguien del equipo."""
+
+
+def _identity(business: str) -> str:
+    if ASSISTANT_NAME:
+        return f"Eres {ASSISTANT_NAME}, {ASSISTANT_ROLE} de {business} por WhatsApp."
+    return f"Eres el asistente de WhatsApp de {business}."
 
 
 def _configure_settings() -> None:
@@ -390,10 +404,11 @@ def query(payload: QueryRequest) -> QueryResponse:
     index = get_index()
     filters = MetadataFilters(filters=[MetadataFilter(key="client_id", value=payload.client_id)])
     retriever = index.as_retriever(similarity_top_k=payload.top_k, filters=filters)
+    business = _client_name(payload.client_id)
     chat_engine = CondensePlusContextChatEngine.from_defaults(
         retriever=retriever,
         system_prompt=SYSTEM_PROMPT.format(
-            business=_client_name(payload.client_id), marker=HANDOFF_MARKER
+            identity=_identity(business), business=business, marker=HANDOFF_MARKER
         ),
     )
     result = chat_engine.chat(
