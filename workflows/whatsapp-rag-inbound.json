@@ -547,7 +547,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json }}",
-        "options": {}
+        "options": { "batching": { "batch": { "batchSize": 1, "batchInterval": 1000 } } }
       }
     },
     {
@@ -753,9 +753,76 @@
         "options": { "response": { "response": { "neverError": true } } }
       },
       "continueOnFail": true
+    },
+    {
+      "id": "45",
+      "name": "Voice Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3680, -260],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Extract Message').first().json.type === 'audio' && $env.VOICE_REPLIES_ENABLED === 'true' }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "46",
+      "name": "Generate Voice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3920, -360],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RAG_API_URL }}/v1/voice-replies",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RAG_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: $json.text.body } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "47",
+      "name": "Build Voice Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4160, -360],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Si ElevenLabs o Meta fallaron no hay media_id: se manda el texto de siempre.\nconst reply = $('Voice Reply?').first().json;\nconst mediaId = $json.media_id;\nif (!mediaId) return [{ json: reply }];\n\nconst audio = { messaging_product: 'whatsapp', to: reply.to, type: 'audio', audio: { id: mediaId } };\n// Números, links o correos van también por escrito: nadie quiere volver a\n// escuchar un audio para copiar un precio o una dirección.\nconst needsText = /\\d|https?:\\/\\/|www\\.|@/.test(reply.text.body);\nreturn needsText ? [{ json: audio }, { json: reply }] : [{ json: audio }];\n"
+      }
     }
   ],
   "connections": {
+    "Voice Reply?": {
+      "main": [
+        [{ "node": "Generate Voice", "type": "main", "index": 0 }],
+        [{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Voice": {
+      "main": [[{ "node": "Build Voice Messages", "type": "main", "index": 0 }]]
+    },
+    "Build Voice Messages": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    },
     "Meta Verify (GET)": {
       "main": [[{ "node": "Check Verify Token", "type": "main", "index": 0 }]]
     },
@@ -814,7 +881,7 @@
     "Format Reply": {
       "main": [
         [
-          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Voice Reply?", "type": "main", "index": 0 },
           { "node": "Log Interaction", "type": "main", "index": 0 }
         ]
       ]
@@ -894,7 +961,7 @@
     "Format Handoff Reply": {
       "main": [
         [
-          { "node": "Send WhatsApp Reply", "type": "main", "index": 0 },
+          { "node": "Voice Reply?", "type": "main", "index": 0 },
           { "node": "Log Interaction", "type": "main", "index": 0 }
         ]
       ]

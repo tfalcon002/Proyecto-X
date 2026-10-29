@@ -24,6 +24,8 @@ Endpoints:
   DELETE /handoffs   -> reactiva el bot con un número antes de que venza la pausa
   POST /v1/audio/transcriptions -> transcribe un audio con Gemini; misma forma
                         que la API de Whisper, así n8n lo usa sin cambios
+  POST /v1/voice-replies -> convierte una respuesta en nota de voz (ElevenLabs),
+                        la sube a WhatsApp y devuelve el media_id
 
 Memoria: /query lee las últimas interacciones del mismo número
 (agente_interacciones) y responde como una conversación, no como una
@@ -58,6 +60,9 @@ HISTORY_LIMIT = int(os.environ.get("HISTORY_LIMIT", "6"))
 HISTORY_HOURS = int(os.environ.get("HISTORY_HOURS", "24"))
 HANDOFF_PAUSE_HOURS = int(os.environ.get("HANDOFF_PAUSE_HOURS", "12"))
 HANDOFF_MARKER = "[DERIVAR]"
+# Sobre este largo la respuesta va en texto: un audio de más de ~40 s de un
+# bot cansa más de lo que ayuda.
+VOICE_MAX_CHARS = int(os.environ.get("VOICE_MAX_CHARS", "600"))
 
 SYSTEM_PROMPT = """Eres el asistente de WhatsApp de {business}. Respondes en español, \
 en tono cercano y breve (mensajes de WhatsApp: 1 a 4 frases, sin markdown).
@@ -329,6 +334,17 @@ class TranscriptionResponse(BaseModel):
     text: str
 
 
+class VoiceReplyRequest(BaseModel):
+    text: str
+    voice_id: str | None = None  # por defecto ELEVENLABS_VOICE_ID
+    phone_number_id: str | None = None  # por defecto WHATSAPP_PHONE_NUMBER_ID
+
+
+class VoiceReplyResponse(BaseModel):
+    media_id: str
+    characters: int
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -519,3 +535,27 @@ def transcribe_audio(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"No se pudo transcribir: {exc}") from exc
     return TranscriptionResponse(text=text)
+
+
+@app.post(
+    "/v1/voice-replies",
+    response_model=VoiceReplyResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def voice_reply(payload: VoiceReplyRequest) -> VoiceReplyResponse:
+    from voice import clean_for_speech, synthesize, upload_to_whatsapp
+
+    text = clean_for_speech(payload.text)
+    if not text:
+        raise HTTPException(status_code=422, detail="No hay texto para leer en voz alta")
+    if len(text) > VOICE_MAX_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Respuesta de {len(text)} caracteres; el máximo para voz es {VOICE_MAX_CHARS}",
+        )
+    try:
+        audio = synthesize(text, payload.voice_id)
+        media_id = upload_to_whatsapp(audio, payload.phone_number_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo generar la nota de voz: {exc}") from exc
+    return VoiceReplyResponse(media_id=media_id, characters=len(text))
