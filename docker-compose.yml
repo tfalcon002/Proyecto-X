@@ -65,9 +65,12 @@ services:
       NOVU_WORKFLOW_ID: ${NOVU_WORKFLOW_ID}
       # Negocios que no agendan citas: "false" apaga el camino de Cal.com.
       AGENDA_ENABLED: ${AGENDA_ENABLED:-true}
+      # "true" para responder con nota de voz cuando el cliente manda un audio
+      VOICE_REPLIES_ENABLED: ${VOICE_REPLIES_ENABLED:-false}
       # Derivación a una persona — ver workflows/README.md
       HANDOFF_NOTIFY_NUMBER: ${HANDOFF_NOTIFY_NUMBER}
       HANDOFF_REPLY: ${HANDOFF_REPLY}
+      HANDOFF_CONTACT: ${HANDOFF_CONTACT}
       HANDOFF_TEMPLATE_NAME: ${HANDOFF_TEMPLATE_NAME}
       HANDOFF_TEMPLATE_LANG: ${HANDOFF_TEMPLATE_LANG:-es}
     volumes:
@@ -100,6 +103,18 @@ services:
       HISTORY_LIMIT: ${HISTORY_LIMIT:-6}
       HISTORY_HOURS: ${HISTORY_HOURS:-24}
       HANDOFF_PAUSE_HOURS: ${HANDOFF_PAUSE_HOURS:-12}
+      ASSISTANT_NAME: ${ASSISTANT_NAME}
+      ASSISTANT_ROLE: ${ASSISTANT_ROLE}
+      HANDOFF_CONTACT: ${HANDOFF_CONTACT}
+      # Notas de voz (POST /v1/voice-replies, ver rag-service/README.md)
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}
+      ELEVENLABS_OUTPUT_FORMAT: ${ELEVENLABS_OUTPUT_FORMAT:-opus_48000_64}
+      VOICE_MAX_CHARS: ${VOICE_MAX_CHARS:-600}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION}
     depends_on:
       postgres:
         condition: service_healthy

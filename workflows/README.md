@@ -116,6 +116,7 @@ falta completarlas en tu `.env` (ver `.env.example`).
 | `WHATSAPP_ACCESS_TOKEN` | Bearer token para llamar a la Graph API (leer media, enviar mensajes) | Meta App → WhatsApp → API Setup (usar un token de **usuario del sistema**, no el temporal de 24h) |
 | `WHATSAPP_PHONE_NUMBER_ID` | ID del número de WhatsApp Business que envía las respuestas | Meta App → WhatsApp → API Setup |
 | `META_GRAPH_API_VERSION` | Versión de la Graph API a usar (ej. `v20.0`) | Documentación de Meta, actualizar periódicamente |
+| `VOICE_REPLIES_ENABLED` | `true`: responde con nota de voz cuando el cliente manda un audio (ver "Respuestas con nota de voz"). Las claves de ElevenLabs van en el servicio `rag` | Lo defines tú (por defecto `false`) |
 | `WHATSAPP_APP_SECRET` | Clave para validar la firma `X-Hub-Signature-256` de cada webhook entrante | Meta App → Configuración → Básica (**no** es `WHATSAPP_ACCESS_TOKEN`) |
 | `WHISPER_API_URL` | Endpoint compatible con la API de transcripción de OpenAI (`/v1/audio/transcriptions`). Vacío: usa el del RAG (`RAG_API_URL`), que transcribe con Gemini | Vacío, servidor propio (Whisper self-hosted) o `https://api.openai.com` |
 | `WHISPER_API_KEY` | Bearer token del servicio anterior. Vacío: usa `RAG_API_KEY` | Vacío si se usa el RAG |
@@ -204,6 +205,25 @@ al número del bot ese día, el aviso en texto libre falla en silencio
 (`Notify Owner` no corta el flujo). Para que llegue siempre, crear en Meta
 una plantilla de categoría "Utilidad" con un solo parámetro de cuerpo
 (`{{1}}`) y poner su nombre en `HANDOFF_TEMPLATE_NAME`.
+
+### Respuestas con nota de voz
+
+Con `VOICE_REPLIES_ENABLED=true`, si el cliente mandó un **audio**, la
+respuesta del RAG y el aviso de derivación salen como nota de voz:
+`Voice Reply?` → `Generate Voice` (llama a `POST /v1/voice-replies` del RAG,
+que usa ElevenLabs y sube el audio a Meta) → `Build Voice Messages` →
+`Send WhatsApp Reply`. Si el cliente escribió, todo sigue en texto.
+
+- Si la respuesta tiene números, links o correos, se manda el audio **y**
+  el texto, para que el cliente pueda copiar el precio o la dirección.
+- Si ElevenLabs o Meta fallan, o la respuesta pasa de `VOICE_MAX_CHARS`,
+  se manda el texto de siempre: el cliente nunca queda sin respuesta.
+- Los horarios y confirmaciones de Cal.com siguen en texto (son puras
+  fechas y correos).
+- `Send WhatsApp Reply` manda los mensajes de a uno, con 1 s entre cada
+  uno, para que el audio llegue antes que el texto.
+- `Log Interaction` guarda el texto de la respuesta, aunque haya salido
+  como audio.
 
 ### Negocios sin agenda
 

@@ -18,7 +18,8 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
                      │                                  de mensajes + respuestas, por client_id)
                      ├── Embeddings: OpenAI, Gemini u Ollama (según EMBEDDING_PROVIDER)
                      ├── LLM de respuesta: OpenAI, Gemini u Ollama (según LLM_PROVIDER)
-                     └── Transcripción de audios: Gemini (POST /v1/audio/transcriptions)
+                     ├── Transcripción de audios: Gemini (POST /v1/audio/transcriptions)
+                     └── Notas de voz: ElevenLabs + subida a Meta (POST /v1/voice-replies)
 ```
 
 - **Un solo contenedor de Postgres** sirve tanto a n8n (base `POSTGRES_DB`)
@@ -48,6 +49,13 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
 - **Transcripción**: `POST /v1/audio/transcriptions` imita la API de Whisper
   (campo `file`, respuesta `{"text": "..."}`) y transcribe con Gemini. Si
   `WHISPER_API_URL` queda vacío en n8n, el workflow usa este endpoint.
+- **Notas de voz**: `POST /v1/voice-replies` limpia el texto (sin emojis,
+  markdown ni links), lo convierte en voz con ElevenLabs en OGG/Opus (el
+  formato que WhatsApp muestra como nota de voz), lo sube a Meta (`/media`)
+  y devuelve el `media_id`. Requiere `ELEVENLABS_API_KEY`,
+  `ELEVENLABS_VOICE_ID`, `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID`.
+  Costo: Flash v2.5 gasta medio crédito por carácter (el plan Starter de
+  US$6/mes alcanza para unas 500 respuestas de 300 caracteres).
 - **Autenticación simple**: Bearer token (`RAG_API_KEY`) igual al que ya
   espera el workflow de n8n. Si no se configura, el servicio queda abierto
   (aceptable solo en desarrollo local). Es una única clave compartida por
@@ -66,6 +74,7 @@ n8n ──HTTP──► rag (FastAPI + LlamaIndex) ──► postgres (base "fal
 | GET | `/handoffs/status?client_id=...&from_number=...` | — | `{"paused": true/false, "paused_until": ...}` |
 | DELETE | `/handoffs?client_id=...&from_number=...` | — | Reactiva el bot con ese número |
 | POST | `/v1/audio/transcriptions` | multipart: `file` (audio), `model` (se ignora) | `{"text": "..."}`; transcribe con Gemini (requiere `GEMINI_API_KEY`) |
+| POST | `/v1/voice-replies` | `{"text": "...", "voice_id"?: "...", "phone_number_id"?: "..."}` | `{"media_id": "...", "characters": N}`; lee el texto con ElevenLabs (OGG/Opus), lo sube a WhatsApp y devuelve el id para mandarlo como audio. 422 si el texto pasa de `VOICE_MAX_CHARS`, 502 si falla ElevenLabs o Meta |
 
 Los cuatro endpoints (salvo `/health`) requieren `Authorization: Bearer
 $RAG_API_KEY` si esa variable está configurada. `/ingest`, `/query` e
