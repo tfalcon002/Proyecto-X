@@ -716,7 +716,7 @@
       "position": [3440, -420],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "const phone = $('Extract Message').first().json.from;\nconst body = $env.HANDOFF_REPLY || 'Le pasé tu mensaje a una persona del equipo y te va a contactar pronto por WhatsApp. ¡Gracias por la paciencia!';\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
+        "jsCode": "const phone = $('Extract Message').first().json.from;\n// Sin HANDOFF_REPLY, se arma con HANDOFF_CONTACT (ej. \"el Nico, el CEO de NeeckPrint\").\nconst contact = $env.HANDOFF_CONTACT;\nconst body = $env.HANDOFF_REPLY || (contact\n  ? `Te paso con ${contact}, que te puede ayudar de mejor forma. Te va a escribir por acá en un rato.`\n  : 'Le pasé tu mensaje a una persona del equipo y te va a contactar pronto por WhatsApp. ¡Gracias por la paciencia!');\n\nreturn [{\n  json: {\n    messaging_product: 'whatsapp',\n    to: phone,\n    type: 'text',\n    text: { body },\n  },\n}];\n"
       }
     },
     {

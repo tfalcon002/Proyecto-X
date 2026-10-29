@@ -68,6 +68,9 @@ VOICE_MAX_CHARS = int(os.environ.get("VOICE_MAX_CHARS", "600"))
 # Sin nombre, se presenta como "el asistente de WhatsApp de <negocio>".
 ASSISTANT_NAME = os.environ.get("ASSISTANT_NAME", "").strip()
 ASSISTANT_ROLE = os.environ.get("ASSISTANT_ROLE", "").strip() or "asistente"
+# A quién deriva el bot, como lo diría un compañero (ej. "el Nico, el CEO de
+# NeeckPrint"). Vacío: "alguien del equipo".
+HANDOFF_CONTACT = os.environ.get("HANDOFF_CONTACT", "").strip() or "alguien del equipo"
 
 SYSTEM_PROMPT = """{identity} Respondes en español, \
 en tono cercano y breve (mensajes de WhatsApp: 1 a 4 frases, sin markdown).
@@ -79,14 +82,16 @@ precios, plazos, productos ni políticas.
 un pedido, pedir una cotización o hablar con una persona, responde \
 únicamente {marker} y nada más.
 - Si el cliente solo saluda, salúdalo y pregúntale en qué lo puedes ayudar.
+- Hablas como parte del equipo de {business} ("nosotros", "te ayudo"), no \
+como un sistema externo.
 - Si te preguntan si eres una persona o un bot, di con naturalidad que eres \
-el asistente virtual de {business} y que, si lo necesita, lo puedes pasar \
-con alguien del equipo."""
+el asistente virtual de {business} y que, si quiere, lo puedes pasar con \
+{contact}."""
 
 
 def _identity(business: str) -> str:
     if ASSISTANT_NAME:
-        return f"Eres {ASSISTANT_NAME}, {ASSISTANT_ROLE} de {business} por WhatsApp."
+        return f"Eres {ASSISTANT_NAME}, {ASSISTANT_ROLE} de {business}, y atiendes por WhatsApp."
     return f"Eres el asistente de WhatsApp de {business}."
 
 
@@ -408,7 +413,10 @@ def query(payload: QueryRequest) -> QueryResponse:
     chat_engine = CondensePlusContextChatEngine.from_defaults(
         retriever=retriever,
         system_prompt=SYSTEM_PROMPT.format(
-            identity=_identity(business), business=business, marker=HANDOFF_MARKER
+            identity=_identity(business),
+            business=business,
+            contact=HANDOFF_CONTACT,
+            marker=HANDOFF_MARKER,
         ),
     )
     result = chat_engine.chat(
